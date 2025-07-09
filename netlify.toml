@@ -1,6 +1,6 @@
 [build]
   publish = "build"
-  command = "npm run build"
+  command = "CI=false npm run build"
 
 [[redirects]]
   from = "/*"
@@ -8,4 +8,6 @@
   status = 200
 
 [build.environment]
-  REACT_APP_API_URL = "https://your-backend-domain.com" 
+  REACT_APP_API_URL = "https://your-backend-domain.com"
+  CI = "false"
+  GENERATE_SOURCEMAP = "false"
