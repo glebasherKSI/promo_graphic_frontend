@@ -500,13 +500,8 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   }, []);
 
   const handleCellClick = useCallback((cellKey: string, event: React.MouseEvent) => {
-    // ПКМ - показываем контекстное меню для выделенных ячеек
-    if (event.button === 2) {
-      if (selectedCellsRef.current.has(cellKey) || selectedCellsRef.current.size > 0) {
-        handleCellContextMenu(event);
-        return;
-      }
-    }
+    // Только для левого клика (выделение ячеек)
+    if (event.button !== 0) return; // Обрабатываем только ЛКМ
 
     // Останавливаем всплытие и поведение по умолчанию
     event.preventDefault();
@@ -535,7 +530,30 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       updateCellSelection(cellKey, true);
       setSelectionStart(cellKey);
     }
-  }, [selectionStart, updateCellSelection, handleCellContextMenu]);
+  }, [selectionStart, updateCellSelection]);
+
+  // Отдельный обработчик для правого клика (контекстное меню)
+  const handleCellRightClick = useCallback((cellKey: string, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    // Если кликнули ПКМ по выделенной ячейке или есть выделенные ячейки
+    if (selectedCellsRef.current.has(cellKey) || selectedCellsRef.current.size > 0) {
+      // Если кликнули по не выделенной ячейке, но есть другие выделенные - добавляем эту ячейку к выделению
+      if (!selectedCellsRef.current.has(cellKey)) {
+        selectedCellsRef.current.add(cellKey);
+        updateCellSelection(cellKey, true);
+      }
+      
+      handleCellContextMenu(event);
+    } else {
+      // Если нет выделенных ячеек, выделяем эту и показываем меню
+      selectedCellsRef.current.add(cellKey);
+      updateCellSelection(cellKey, true);
+      setSelectionStart(cellKey);
+      handleCellContextMenu(event);
+    }
+  }, [updateCellSelection, handleCellContextMenu]);
 
   const handleCellMouseDown = useCallback((cellKey: string, event: React.MouseEvent) => {
     if (event.button === 0) { // Левая кнопка мыши
@@ -843,7 +861,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                             key={dayOfMonth}
                             data-cell-key={cellKey}
                             onClick={(e) => handleCellClick(cellKey, e)}
-                            onContextMenu={(e) => handleCellClick(cellKey, e)}
+                            onContextMenu={(e) => handleCellRightClick(cellKey, e)}
                             onMouseDown={(e) => handleCellMouseDown(cellKey, e)}
                             onMouseEnter={(e) => handleCellMouseEnter(cellKey, e)}
                             className={`calendar-cell-selectable ${isCellSelected(cellKey) ? 'calendar-cell-selected' : ''}`}
@@ -966,7 +984,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                           key={dayOfMonth}
                           data-cell-key={cellKey}
                           onClick={(e) => handleCellClick(cellKey, e)}
-                          onContextMenu={(e) => handleCellClick(cellKey, e)}
+                          onContextMenu={(e) => handleCellRightClick(cellKey, e)}
                           onMouseDown={(e) => handleCellMouseDown(cellKey, e)}
                           onMouseEnter={(e) => handleCellMouseEnter(cellKey, e)}
                           className={`calendar-cell-selectable ${isCellSelected(cellKey) ? 'calendar-cell-selected' : ''}`}
