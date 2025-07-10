@@ -76,12 +76,23 @@ const Calendar: React.FC<CalendarProps> = ({
     const startOfMonth = dayjs().year(selectedYear).month(selectedMonth - 1).startOf('month');
     const endOfMonth = startOfMonth.endOf('month');
 
-    return (
+    // Проверяем попадает ли само событие в месяц
+    const eventInMonth = (
       selectedProjects.includes(event.project) &&
       ((eventStartDate.isSameOrBefore(endOfMonth) && eventEndDate.isSameOrAfter(startOfMonth)) ||
         (eventStartDate.isSameOrBefore(endOfMonth) && eventStartDate.isSameOrAfter(startOfMonth)) ||
         (eventEndDate.isSameOrBefore(endOfMonth) && eventEndDate.isSameOrAfter(startOfMonth)))
     );
+
+    // Проверяем есть ли каналы информирования в текущем месяце
+    const hasChannelsInMonth = selectedProjects.includes(event.project) &&
+      event.info_channels && 
+      event.info_channels.some(channel => {
+        const channelDate = dayjs(channel.start_date);
+        return channelDate.isBetween(startOfMonth, endOfMonth, 'day', '[]');
+      });
+
+    return eventInMonth || hasChannelsInMonth;
   });
 
   const handleMonthChange = (date: dayjs.Dayjs | null) => {

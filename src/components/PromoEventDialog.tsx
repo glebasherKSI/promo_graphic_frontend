@@ -202,7 +202,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
       setLoading(true);
       setError(null);
 
-      // Гарантируем, что info_channels всегда будет массивом
+      // Преобразуем каналы в формат массива для API
       const channelsArray: InfoChannelCreate[] = [];
       
       // Если есть выбранные типы каналов, добавляем их в массив
