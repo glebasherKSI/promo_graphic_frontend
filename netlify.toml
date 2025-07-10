@@ -8,6 +8,6 @@
   status = 200
 
 [build.environment]
-  REACT_APP_API_URL = "http://0.0.0.0:8000 "
+  REACT_APP_API_URL = "http://91.209.226.31:8000 "
   CI = "false"
   GENERATE_SOURCEMAP = "false"
