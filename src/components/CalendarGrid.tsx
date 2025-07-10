@@ -370,6 +370,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   const handleCloseCellMenu = useCallback(() => {
     setCellContextMenu(null);
     setSelectedCellsData(null);
+    // НЕ очищаем выделение при закрытии меню
   }, []);
 
   // Функция для получения дат из выделенных ячеек
@@ -462,10 +463,25 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
 
   const days = getDaysArray();
 
+  // Функция для обновления выделения в DOM без ререндера
+  const updateCellSelection = useCallback((cellKey: string, selected: boolean) => {
+    const cell = document.querySelector(`[data-cell-key="${cellKey}"]`);
+    if (cell) {
+      if (selected) {
+        cell.classList.add('calendar-cell-selected');
+        console.log('Выделена ячейка:', cellKey);
+      } else {
+        cell.classList.remove('calendar-cell-selected');
+        console.log('Снято выделение ячейки:', cellKey);
+      }
+    }
+  }, []);
+
   // Обработчик клавиатуры для отмены выделения по Escape
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && selectedCellsRef.current.size > 0) {
+        console.log('Очистка выделения по Escape');
         // Убираем классы выделения с DOM элементов
         selectedCellsRef.current.forEach(cellKey => {
           const cell = document.querySelector(`[data-cell-key="${cellKey}"]`);
@@ -486,18 +502,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   const getCellKey = (project: string, rowType: string, dayOfMonth: number) => {
     return `${project}-${rowType}-${dayOfMonth}`;
   };
-
-  // Функция для обновления выделения в DOM без ререндера
-  const updateCellSelection = useCallback((cellKey: string, selected: boolean) => {
-    const cell = document.querySelector(`[data-cell-key="${cellKey}"]`);
-    if (cell) {
-      if (selected) {
-        cell.classList.add('calendar-cell-selected');
-      } else {
-        cell.classList.remove('calendar-cell-selected');
-      }
-    }
-  }, []);
 
   const handleCellClick = useCallback((cellKey: string, event: React.MouseEvent) => {
     // Только для левого клика (выделение ячеек)
@@ -532,8 +536,21 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     }
   }, [selectionStart, updateCellSelection]);
 
+  // Восстановление выделения после ререндера
+  React.useEffect(() => {
+    // Восстанавливаем CSS классы выделения для всех выделенных ячеек
+    selectedCellsRef.current.forEach(cellKey => {
+      const cell = document.querySelector(`[data-cell-key="${cellKey}"]`);
+      if (cell && !cell.classList.contains('calendar-cell-selected')) {
+        cell.classList.add('calendar-cell-selected');
+        console.log('Восстановлено выделение ячейки после ререндера:', cellKey);
+      }
+    });
+  });
+
   // Отдельный обработчик для правого клика (контекстное меню)
   const handleCellRightClick = useCallback((cellKey: string, event: React.MouseEvent) => {
+    console.log('ПКМ по ячейке:', cellKey, 'Выделенных ячеек:', selectedCellsRef.current.size);
     event.preventDefault();
     event.stopPropagation();
 
@@ -543,6 +560,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       if (!selectedCellsRef.current.has(cellKey)) {
         selectedCellsRef.current.add(cellKey);
         updateCellSelection(cellKey, true);
+        console.log('Добавлена ячейка к выделению при ПКМ:', cellKey);
       }
       
       handleCellContextMenu(event);
@@ -551,6 +569,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       selectedCellsRef.current.add(cellKey);
       updateCellSelection(cellKey, true);
       setSelectionStart(cellKey);
+      console.log('Выделена новая ячейка при ПКМ:', cellKey);
       handleCellContextMenu(event);
     }
   }, [updateCellSelection, handleCellContextMenu]);
@@ -625,9 +644,15 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
 
   // Очистка выделения при клике вне ячеек
   const handleTableClick = useCallback((event: React.MouseEvent) => {
-    // Очищаем выделение только если клик был не по ячейке
+    // Обрабатываем только левый клик
+    if (event.button !== 0) return;
+    
+    // Очищаем выделение только если клик был не по ячейке и не по контекстному меню
     const target = event.target as HTMLElement;
-    if (!target.closest('.calendar-cell-selectable')) {
+    if (!target.closest('.calendar-cell-selectable') && 
+        !target.closest('[role="menu"]') && 
+        !target.closest('.MuiPaper-root')) {
+      console.log('Очистка выделения через handleTableClick');
       selectedCellsRef.current.forEach(key => updateCellSelection(key, false));
       selectedCellsRef.current.clear();
       setSelectionStart(null);
@@ -663,6 +688,14 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       <TableContainer 
         component={Paper} 
         onClick={handleTableClick}
+        onContextMenu={(e) => {
+          // Предотвращаем стандартное контекстное меню и всплытие события
+          // если клик был не по ячейке
+          const target = e.target as HTMLElement;
+          if (!target.closest('.calendar-cell-selectable')) {
+            e.preventDefault();
+          }
+        }}
         sx={{ position: 'relative' }}
       >
         {loading && (
