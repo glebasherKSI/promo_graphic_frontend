@@ -20,6 +20,7 @@ import {
 import { DatePicker } from '@mui/x-date-pickers';
 import dayjs from '../utils/dayjs';
 import CalendarGrid from '../components/CalendarGrid';
+import ColorLegend from '../components/ColorLegend';
 import { PromoEvent, InfoChannel, AuthState } from '../types';
 
 interface CalendarProps {
@@ -38,6 +39,8 @@ interface CalendarProps {
   PROJECTS: string[];
   handleEventEdit: (event: PromoEvent) => void;
   handleChannelEdit: (channel: InfoChannel) => void;
+  handleEventCreate?: (eventData: any, project: string, startDate: string, endDate: string) => void;
+  handleChannelCreate?: (channelData: any, project: string, startDate: string) => void;
 }
 
 const Calendar: React.FC<CalendarProps> = ({
@@ -55,7 +58,9 @@ const Calendar: React.FC<CalendarProps> = ({
   setOpenDialog,
   PROJECTS,
   handleEventEdit,
-  handleChannelEdit
+  handleChannelEdit,
+  handleEventCreate,
+  handleChannelCreate
 }) => {
   // Инициализируем текущую дату при монтировании компонента
   useEffect(() => {
@@ -103,56 +108,53 @@ const Calendar: React.FC<CalendarProps> = ({
       )}
 
       {/* Фильтры */}
-      <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-        <FormControl sx={{ minWidth: 200 }}>
-          <DatePicker
-            views={['month', 'year']}
-            label="Месяц"
-            value={dayjs().year(selectedYear).month(selectedMonth - 1)}
-            onChange={handleMonthChange}
-          />
-        </FormControl>
+      <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+          <FormControl sx={{ minWidth: 200 }}>
+            <DatePicker
+              views={['month', 'year']}
+              label="Месяц"
+              value={dayjs().year(selectedYear).month(selectedMonth - 1)}
+              onChange={handleMonthChange}
+            />
+          </FormControl>
 
-        <FormControl sx={{ minWidth: 200 }}>
-          <InputLabel>Проекты</InputLabel>
-          <Select
-            multiple
-            value={selectedProjects}
-            onChange={handleProjectsChange}
-            renderValue={(selected) => (
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                {(selected as string[]).map((value) => (
-                  <Chip key={value} label={value} size="small" />
-                ))}
-              </Box>
-            )}
-          >
-            {PROJECTS.map((project) => (
-              <MenuItem key={project} value={project}>
-                {project}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+          <FormControl sx={{ minWidth: 200 }}>
+            <InputLabel>Проекты</InputLabel>
+            <Select
+              multiple
+              value={selectedProjects}
+              onChange={handleProjectsChange}
+              renderValue={(selected) => (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {(selected as string[]).map((value) => (
+                    <Chip key={value} label={value} size="small" />
+                  ))}
+                </Box>
+              )}
+            >
+              {PROJECTS.map((project) => (
+                <MenuItem key={project} value={project}>
+                  {project}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
-        <Button
-          variant="contained"
-          onClick={loadEvents}
-          disabled={loading}
-          startIcon={loading ? <CircularProgress size={20} /> : null}
-        >
-          Обновить
-        </Button>
-
-        {auth.user?.role === 'admin' && (
           <Button
             variant="contained"
-            color="primary"
-            onClick={() => setOpenDialog(true)}
+            onClick={loadEvents}
+            disabled={loading}
+            startIcon={loading ? <CircularProgress size={20} /> : null}
           >
-            Добавить событие
+            Обновить
           </Button>
-        )}
+        </Box>
+
+        {/* Легенда цветов */}
+        <Box sx={{ position: 'relative' }}>
+          <ColorLegend />
+        </Box>
       </Box>
 
       {/* Отображение количества событий */}
@@ -175,6 +177,8 @@ const Calendar: React.FC<CalendarProps> = ({
         auth={auth}
         loading={loading}
         loadEvents={loadEvents}
+        onEventCreate={handleEventCreate}
+        onChannelCreate={handleChannelCreate}
       />
     </Box>
   );

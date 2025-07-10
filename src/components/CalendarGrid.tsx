@@ -33,7 +33,9 @@ import axios from 'axios';
 import EditIcon from '@mui/icons-material/Edit';
 import {
   PROMO_TYPES,
-  CHANNEL_TYPES
+  CHANNEL_TYPES,
+  PROMO_EVENT_COLORS,
+  CHANNEL_COLORS
 } from '../constants/promoTypes';
 
 // Праздничные дни РФ (ежегодные)
@@ -46,23 +48,20 @@ const HOLIDAYS = [
   { month: 11, days: [4] },
 ];
 
-// Цвета для событий
-const EVENT_COLORS: { [key: string]: string } = {
-  'Акции': "#F3A712",
-  'Турниры': "#A8E6CF",
-  'Лотереи': "#FF8A5B",
-  'Кэшбек': "#E6A8D7",
-  'MSGR': "#C4A7E7",
-  'BPS': "#FFB6C1",
-  'PUSH': "#8EDCE6",
-  'SMM': "#FFD166",
-  'Депозитки': "#98FF98",
-  'E-mail': "#79addc",
-  'Спорт рассылка': "#f4a261",
-  'Спорт размещение': "#e76f51",
-  'Страница': "#8ab17d",
-  'Баннер': "#2a9d8f",
-  'Новости': "#fcca46"
+// Функция для получения цвета события
+const getEventColor = (promoType: string, promoKind?: string): string => {
+  // Если есть вид промо, используем комбинацию тип-вид
+  if (promoKind) {
+    const colorKey = `${promoType}-${promoKind}`;
+    return PROMO_EVENT_COLORS[colorKey] || PROMO_EVENT_COLORS[promoType] || '#666';
+  }
+  // Иначе используем только тип
+  return PROMO_EVENT_COLORS[promoType] || '#666';
+};
+
+// Функция для получения цвета канала
+const getChannelColor = (channelType: string): string => {
+  return CHANNEL_COLORS[channelType] || '#666';
 };
 
 interface CalendarGridProps {
@@ -77,6 +76,8 @@ interface CalendarGridProps {
   auth: AuthState;
   loading: boolean;
   loadEvents: () => Promise<void>;
+  onEventCreate?: (eventData: any, project: string, startDate: string, endDate: string) => void;
+  onChannelCreate?: (channelData: any, project: string, startDate: string) => void;
 }
 
 const CalendarGrid: React.FC<CalendarGridProps> = ({
@@ -90,17 +91,33 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   onChannelEdit,
   auth,
   loading,
-  loadEvents
+  loadEvents,
+  onEventCreate,
+  onChannelCreate
 }) => {
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number } | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<DisplayPromoEvent | null>(null);
   const [highlightedEventId, setHighlightedEventId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   
+  // Контекстное меню для выделенных ячеек
+  const [cellContextMenu, setCellContextMenu] = useState<{ mouseX: number; mouseY: number } | null>(null);
+  const [selectedCellsData, setSelectedCellsData] = useState<{
+    project: string;
+    rowType: string;
+    startDate: string;
+    endDate: string;
+    isChannelRow: boolean;
+  } | null>(null);
+  
   // Убираем состояние для выделенных ячеек - будем работать напрямую с DOM
   // const [selectedCells, setSelectedCells] = useState<{[key: string]: boolean}>({});
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState<string | null>(null);
+  
+  // Новое состояние для drag selection
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartCell, setDragStartCell] = useState<string | null>(null);
   
   // Ref для отслеживания выделенных ячеек без ререндера
   const selectedCellsRef = useRef<Set<string>>(new Set());
@@ -350,6 +367,69 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     setSelectedEvent(null);
   }, []);
 
+  const handleCloseCellMenu = useCallback(() => {
+    setCellContextMenu(null);
+    setSelectedCellsData(null);
+  }, []);
+
+  // Функция для получения дат из выделенных ячеек
+  const getSelectedCellsDates = useCallback((cellKeys: string[]) => {
+    const days = cellKeys.map(key => {
+      const parts = key.split('-');
+      return parseInt(parts[parts.length - 1]); // Последняя часть - день месяца
+    }).sort((a, b) => a - b);
+
+    const startDay = days[0];
+    const endDay = days[days.length - 1];
+
+    const startDate = dayjs()
+      .year(selectedYear)
+      .month(selectedMonth - 1)
+      .date(startDay)
+      .startOf('day')
+      .format('YYYY-MM-DDTHH:mm:ss');
+
+    const endDate = dayjs()
+      .year(selectedYear)
+      .month(selectedMonth - 1)
+      .date(endDay)
+      .endOf('day')
+      .format('YYYY-MM-DDTHH:mm:ss');
+
+    return { startDate, endDate };
+  }, [selectedMonth, selectedYear]);
+
+  // Обработчик ПКМ на выделенных ячейках
+  const handleCellContextMenu = useCallback((event: React.MouseEvent) => {
+    if (selectedCellsRef.current.size === 0) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const cellKeys = Array.from(selectedCellsRef.current);
+    const firstCellKey = cellKeys[0];
+    const parts = firstCellKey.split('-');
+    const dayOfMonth = parts[parts.length - 1]; // Последняя часть - день месяца
+    const project = parts[0]; // Первая часть - проект
+    const rowType = parts.slice(1, -1).join('-'); // Средние части - тип строки
+    
+    const { startDate, endDate } = getSelectedCellsDates(cellKeys);
+    const isChannelRow = CHANNEL_TYPES.some(type => type === rowType);
+
+    setSelectedCellsData({
+      project,
+      rowType,
+      startDate,
+      endDate,
+      isChannelRow
+    });
+
+    setCellContextMenu({
+      mouseX: event.clientX,
+      mouseY: event.clientY
+    });
+  }, [getSelectedCellsDates]);
+
   const handleEdit = useCallback(() => {
     if (selectedEvent) {
       if (selectedEvent._channel) {
@@ -420,6 +500,14 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   }, []);
 
   const handleCellClick = useCallback((cellKey: string, event: React.MouseEvent) => {
+    // ПКМ - показываем контекстное меню для выделенных ячеек
+    if (event.button === 2) {
+      if (selectedCellsRef.current.has(cellKey) || selectedCellsRef.current.size > 0) {
+        handleCellContextMenu(event);
+        return;
+      }
+    }
+
     // Останавливаем всплытие и поведение по умолчанию
     event.preventDefault();
     event.stopPropagation();
@@ -447,18 +535,71 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       updateCellSelection(cellKey, true);
       setSelectionStart(cellKey);
     }
-  }, [selectionStart, updateCellSelection]);
+  }, [selectionStart, updateCellSelection, handleCellContextMenu]);
 
   const handleCellMouseDown = useCallback((cellKey: string, event: React.MouseEvent) => {
     if (event.button === 0) { // Левая кнопка мыши
       event.preventDefault();
       event.stopPropagation();
       setIsSelecting(true);
+      
       if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
         setSelectionStart(cellKey);
+        // Начинаем drag selection
+        setIsDragging(true);
+        setDragStartCell(cellKey);
       }
     }
   }, []);
+
+  // Новый обработчик для drag selection при наведении мыши
+  const handleCellMouseEnter = useCallback((cellKey: string, event: React.MouseEvent) => {
+    if (isDragging && dragStartCell && event.buttons === 1) { // Проверяем что ЛКМ всё еще зажата
+      // Получаем все ячейки между начальной и текущей
+      const startParts = dragStartCell.split('-');
+      const currentParts = cellKey.split('-');
+      
+      // Проверяем что это ячейки из одной строки (одинаковый проект и тип)
+      const startProject = startParts[0];
+      const startRowType = startParts.slice(1, -1).join('-');
+      const currentProject = currentParts[0];
+      const currentRowType = currentParts.slice(1, -1).join('-');
+      
+      if (startProject === currentProject && startRowType === currentRowType) {
+        const startDay = parseInt(startParts[startParts.length - 1]);
+        const currentDay = parseInt(currentParts[currentParts.length - 1]);
+        
+        // Очищаем предыдущее выделение
+        selectedCellsRef.current.forEach(key => updateCellSelection(key, false));
+        selectedCellsRef.current.clear();
+        
+        // Выделяем диапазон от startDay до currentDay
+        const minDay = Math.min(startDay, currentDay);
+        const maxDay = Math.max(startDay, currentDay);
+        
+        for (let day = minDay; day <= maxDay; day++) {
+          const rangeCellKey = getCellKey(startProject, startRowType, day);
+          selectedCellsRef.current.add(rangeCellKey);
+          updateCellSelection(rangeCellKey, true);
+        }
+      }
+    }
+  }, [isDragging, dragStartCell, updateCellSelection]);
+
+  // Обработчик завершения drag selection
+  const handleMouseUp = useCallback((event: MouseEvent) => {
+    if (isDragging) {
+      setIsDragging(false);
+      setDragStartCell(null);
+      setIsSelecting(false);
+    }
+  }, [isDragging]);
+
+  // Добавляем глобальный обработчик mouseup
+  React.useEffect(() => {
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => document.removeEventListener('mouseup', handleMouseUp);
+  }, [handleMouseUp]);
 
   const isCellSelected = useCallback((cellKey: string) => {
     return selectedCellsRef.current.has(cellKey);
@@ -474,6 +615,30 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       setSelectionStart(null);
     }
   }, [updateCellSelection]);
+
+  // Обработчики создания событий и каналов
+  const handleCreatePromoEvent = useCallback(() => {
+    if (selectedCellsData && onEventCreate) {
+      onEventCreate(
+        { promo_type: selectedCellsData.rowType },
+        selectedCellsData.project,
+        selectedCellsData.startDate,
+        selectedCellsData.endDate
+      );
+    }
+    handleCloseCellMenu();
+  }, [selectedCellsData, onEventCreate, handleCloseCellMenu]);
+
+  const handleCreateChannel = useCallback(() => {
+    if (selectedCellsData && onChannelCreate) {
+      onChannelCreate(
+        { type: selectedCellsData.rowType },
+        selectedCellsData.project,
+        selectedCellsData.startDate
+      );
+    }
+    handleCloseCellMenu();
+  }, [selectedCellsData, onChannelCreate, handleCloseCellMenu]);
 
   return (
     <>
@@ -678,7 +843,9 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                             key={dayOfMonth}
                             data-cell-key={cellKey}
                             onClick={(e) => handleCellClick(cellKey, e)}
+                            onContextMenu={(e) => handleCellClick(cellKey, e)}
                             onMouseDown={(e) => handleCellMouseDown(cellKey, e)}
+                            onMouseEnter={(e) => handleCellMouseEnter(cellKey, e)}
                             className={`calendar-cell-selectable ${isCellSelected(cellKey) ? 'calendar-cell-selected' : ''}`}
                             sx={{
                               height: `${blockHeight}px`,
@@ -727,7 +894,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                                       label={event.promo_type}
                                       size="small"
                                       sx={{
-                                        backgroundColor: EVENT_COLORS[event.promo_type] || '#666',
+                                        backgroundColor: getEventColor(event.promo_type, event.promo_kind),
                                         color: '#000',
                                         fontSize: '0.7rem',
                                         height: 20,
@@ -799,7 +966,9 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                           key={dayOfMonth}
                           data-cell-key={cellKey}
                           onClick={(e) => handleCellClick(cellKey, e)}
+                          onContextMenu={(e) => handleCellClick(cellKey, e)}
                           onMouseDown={(e) => handleCellMouseDown(cellKey, e)}
+                          onMouseEnter={(e) => handleCellMouseEnter(cellKey, e)}
                           className={`calendar-cell-selectable ${isCellSelected(cellKey) ? 'calendar-cell-selected' : ''}`}
                           sx={{
                             height: '32px',
@@ -838,7 +1007,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                                   label={channel.type}
                                   size="small"
                                   sx={{
-                                    backgroundColor: EVENT_COLORS[channel.type] || '#666',
+                                    backgroundColor: getChannelColor(channel.type),
                                     color: '#000',
                                     fontSize: '0.7rem',
                                     height: 20,
@@ -905,6 +1074,41 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
               >
                 Удалить
                 {isDeleting && <CircularProgress size={20} sx={{ ml: 1 }} />}
+              </MenuItem>
+            )}
+          </>
+        )}
+      </Menu>
+
+      {/* Контекстное меню для выделенных ячеек */}
+      <Menu
+        open={cellContextMenu !== null}
+        onClose={handleCloseCellMenu}
+        anchorReference="anchorPosition"
+        anchorPosition={
+          cellContextMenu !== null
+            ? { top: cellContextMenu.mouseY, left: cellContextMenu.mouseX }
+            : undefined
+        }
+        transitionDuration={0}
+        sx={{
+          '& .MuiPaper-root': {
+            backgroundColor: '#333a56',
+            color: '#eff0f1',
+            minWidth: '200px'
+          }
+        }}
+      >
+        {selectedCellsData && (
+          <>
+            {!selectedCellsData.isChannelRow && (
+              <MenuItem onClick={handleCreatePromoEvent} sx={{ mt: 1 }}>
+                Создать промо-событие
+              </MenuItem>
+            )}
+            {selectedCellsData.isChannelRow && (
+              <MenuItem onClick={handleCreateChannel} sx={{ mt: 1 }}>
+                Создать информирование
               </MenuItem>
             )}
           </>

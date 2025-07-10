@@ -61,6 +61,21 @@ function App() {
   const [openChannelDialog, setOpenChannelDialog] = useState(false);
   const [editingEvent, setEditingEvent] = useState<PromoEvent | null>(null);
   const [editingChannel, setEditingChannel] = useState<InfoChannel | null>(null);
+  
+  // Диалоги создания из календаря
+  const [openCalendarEventDialog, setOpenCalendarEventDialog] = useState(false);
+  const [openCalendarChannelDialog, setOpenCalendarChannelDialog] = useState(false);
+  const [calendarEventData, setCalendarEventData] = useState<{
+    project: string;
+    promo_type: string;
+    start_date: string;
+    end_date: string;
+  } | null>(null);
+  const [calendarChannelData, setCalendarChannelData] = useState<{
+    project: string;
+    type: string;
+    start_date: string;
+  } | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(6);
   const [selectedYear, setSelectedYear] = useState(2025);
   const [selectedProjects, setSelectedProjects] = useState(PROJECTS);
@@ -163,6 +178,16 @@ function App() {
     setEditingChannel(null);
   };
 
+  const handleCalendarEventDialogClose = () => {
+    setOpenCalendarEventDialog(false);
+    setCalendarEventData(null);
+  };
+
+  const handleCalendarChannelDialogClose = () => {
+    setOpenCalendarChannelDialog(false);
+    setCalendarChannelData(null);
+  };
+
   const handleEventEdit = (event: PromoEvent) => {
     setEditingEvent(event);
     setOpenEditDialog(true);
@@ -175,6 +200,26 @@ function App() {
   const handleChannelEdit = (channel: InfoChannel) => {
     setEditingChannel(channel);
     setOpenChannelDialog(true);
+  };
+
+  // Обработчики создания из календаря
+  const handleCalendarEventCreate = (eventData: any, project: string, startDate: string, endDate: string) => {
+    setCalendarEventData({
+      project,
+      promo_type: eventData.promo_type,
+      start_date: startDate,
+      end_date: endDate
+    });
+    setOpenCalendarEventDialog(true);
+  };
+
+  const handleCalendarChannelCreate = (channelData: any, project: string, startDate: string) => {
+    setCalendarChannelData({
+      project,
+      type: channelData.type,
+      start_date: startDate
+    });
+    setOpenCalendarChannelDialog(true);
   };
 
   const handleEventSave = async (eventData: PromoEventCreate): Promise<void> => {
@@ -320,6 +365,8 @@ function App() {
                     PROJECTS={PROJECTS}
                     handleEventEdit={handleEventEdit}
                     handleChannelEdit={handleChannelEdit}
+                    handleEventCreate={handleCalendarEventCreate}
+                    handleChannelCreate={handleCalendarChannelCreate}
                   />
                 } 
               />
@@ -352,6 +399,54 @@ function App() {
               onSave={handleChannelSave}
               channel={editingChannel}
               projects={PROJECTS}
+              events={events}
+            />
+
+            {/* Диалог создания события из календаря */}
+            <EventDialog
+              open={openCalendarEventDialog}
+              onClose={handleCalendarEventDialogClose}
+              onSave={async (eventData) => {
+                await handleEventSave(eventData);
+                handleCalendarEventDialogClose();
+              }}
+              event={calendarEventData ? {
+                id: '',
+                project: calendarEventData.project,
+                promo_type: calendarEventData.promo_type,
+                promo_kind: '',
+                name: '',
+                comment: '',
+                segments: 'СНГ',
+                start_date: calendarEventData.start_date,
+                end_date: calendarEventData.end_date,
+                link: '',
+                info_channels: []
+              } as PromoEvent : null}
+              projects={PROJECTS}
+            />
+
+            {/* Диалог создания канала из календаря */}
+            <InfoChannelDialog
+              open={openCalendarChannelDialog}
+              onClose={handleCalendarChannelDialogClose}
+              onSave={async (channelData) => {
+                await handleChannelSave(channelData);
+                handleCalendarChannelDialogClose();
+              }}
+              channel={calendarChannelData ? {
+                id: '',
+                type: calendarChannelData.type,
+                project: calendarChannelData.project,
+                start_date: calendarChannelData.start_date,
+                name: '',
+                segments: 'СНГ',
+                comment: '',
+                link: '',
+                promo_id: ''
+              } as InfoChannel : null}
+              projects={PROJECTS}
+              events={events}
             />
         </Container>
         </Router>

@@ -464,6 +464,46 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
               </Button>
             </Box>
 
+            {/* Существующие каналы информирования (только для чтения) */}
+            {event && event.info_channels && event.info_channels.length > 0 && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 2, color: 'text.primary', fontWeight: 500 }}>
+                  Связанные каналы информирования:
+                </Typography>
+                <Stack spacing={2}>
+                  {event.info_channels.map((channel, index) => (
+                    <Box
+                      key={`existing-${index}`}
+                      sx={{
+                        p: 2,
+                        bgcolor: 'background.paper',
+                        borderRadius: 1,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                      }}
+                    >
+                      <Stack direction="row" spacing={2} alignItems="center">
+                        <Chip 
+                          label={channel.type}
+                          size="medium"
+                          color="info"
+                          variant="outlined"
+                          sx={{ 
+                            fontWeight: 500,
+                            minWidth: '80px'
+                          }}
+                        />
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                          Дата старта: <strong>{formatDate(channel.start_date)}</strong>
+                        </Typography>
+                      </Stack>
+                    </Box>
+                  ))}
+                </Stack>
+              </Box>
+            )}
+
             <Stack spacing={2}>
               {infoChannels.map((channel, index) => (
                 <Box

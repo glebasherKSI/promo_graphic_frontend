@@ -14,7 +14,7 @@ import {
   Typography
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers';
-import { InfoChannel, InfoChannelFormData } from '../types';
+import { InfoChannel, InfoChannelFormData, PromoEvent } from '../types';
 import dayjs from '../utils/dayjs';
 import { CHANNEL_TYPES } from '../constants/promoTypes';
 
@@ -24,6 +24,7 @@ interface InfoChannelDialogProps {
   onSave: (channel: Partial<InfoChannel>) => Promise<void>;
   channel: InfoChannel | null;
   projects: string[];
+  events: PromoEvent[];
 }
 
 const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
@@ -31,7 +32,8 @@ const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
   onClose,
   onSave,
   channel,
-  projects
+  projects,
+  events
 }) => {
   const [formData, setFormData] = useState<InfoChannelFormData>({
     type: '',
@@ -75,11 +77,37 @@ const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
   }, [channel]);
 
   const handleChange = (field: keyof InfoChannelFormData, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setFormData(prev => {
+      const updatedData = {
+        ...prev,
+        [field]: value
+      };
+
+      // Если изменяется promo_id, автоматически заполняем название, комментарий и ссылку из промо события
+      if (field === 'promo_id' && value) {
+        const selectedPromoEvent = events.find(event => event.id === value);
+        if (selectedPromoEvent) {
+          // Заполняем название, комментарий и ссылку, если они есть в промо событии
+          if (selectedPromoEvent.name) {
+            updatedData.name = selectedPromoEvent.name;
+          }
+          if (selectedPromoEvent.comment) {
+            updatedData.comment = selectedPromoEvent.comment;
+          }
+          if (selectedPromoEvent.link) {
+            updatedData.link = selectedPromoEvent.link;
+          }
+        }
+      }
+
+      return updatedData;
+    });
   };
+
+  // Фильтруем промо события по выбранному проекту
+  const filteredPromoEvents = events.filter(event => 
+    formData.project ? event.project === formData.project : false
+  );
 
   const handleSubmit = async () => {
     try {
@@ -150,6 +178,26 @@ const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
             </Select>
           </FormControl>
 
+          {/* Идентификатор промо */}
+          <FormControl fullWidth>
+            <InputLabel>Идентификатор промо</InputLabel>
+            <Select
+              value={formData.promo_id || ''}
+              onChange={(e) => handleChange('promo_id', e.target.value)}
+              label="Идентификатор промо"
+              disabled={!formData.project}
+            >
+              <MenuItem value="">
+                <em>Не выбрано</em>
+              </MenuItem>
+              {filteredPromoEvents.map(event => (
+                <MenuItem key={event.id} value={event.id}>
+                  {event.name} ({event.promo_type} - {dayjs(event.start_date).format('DD.MM.YYYY')})
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
           {/* Дата */}
           <DateTimePicker
             label="Дата"
@@ -197,16 +245,6 @@ const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
             onChange={(e) => handleChange('link', e.target.value)}
             fullWidth
           />
-
-          {/* Promo ID */}
-          {channel?.promo_id && (
-            <TextField
-              label="Promo ID"
-              value={channel.promo_id}
-              disabled
-              fullWidth
-            />
-          )}
 
           {/* Отображение ошибки */}
           {error && (
