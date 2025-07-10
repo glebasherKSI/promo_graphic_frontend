@@ -28,7 +28,7 @@ export interface PromoEvent {
 
 export interface PromoEventCreate extends Omit<PromoEvent, 'id' | 'info_channels'> {
   id?: string;
-  info_channels: InfoChannelCreate[];
+  info_channels: { [key: string]: InfoChannelCreate };
 }
 
 export interface InfoChannel {

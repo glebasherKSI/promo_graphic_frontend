@@ -154,7 +154,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
         start_date: formData.start_date || dayjs().format('YYYY-MM-DDTHH:mm:ss'),
         end_date: formData.end_date || dayjs().add(1, 'day').format('YYYY-MM-DDTHH:mm:ss'),
         link: formData.link || '',
-        info_channels: Object.values(channelsDict)
+        info_channels: channelsDict
       };
 
       await onSave(eventData);
