@@ -1,4 +1,5 @@
 import { Dayjs } from 'dayjs';
+import { ChannelType } from '../constants/promoTypes';
 
 export interface User {
   id: string;
@@ -43,8 +44,16 @@ export interface InfoChannel {
   promo_id: string;
 }
 
-export interface InfoChannelCreate extends Omit<InfoChannel, 'id'> {
-  id?: string;
+// Обновленный интерфейс для создания каналов - совместим с бэкендом
+export interface InfoChannelCreate {
+  type: ChannelType;
+  project: string;
+  start_date: string;
+  name: string;
+  comment?: string;
+  segments?: string;
+  link?: string;
+  promo_id?: string;
 }
 
 export interface InfoChannelFormData {

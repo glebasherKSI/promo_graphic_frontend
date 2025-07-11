@@ -27,7 +27,7 @@ import {
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { PromoEvent, PromoEventCreate, PromoEventFormData, InfoChannel, InfoChannelCreate } from '../types';
-import { PROMO_TYPES, PROMO_KINDS, CHANNEL_TYPES } from '../constants/promoTypes';
+import { PROMO_TYPES, PROMO_KINDS, CHANNEL_TYPES, ChannelType } from '../constants/promoTypes';
 import dayjs from '../utils/dayjs';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -185,7 +185,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
     setInfoChannels(prev => [
       ...prev,
       {
-        type: '',
+        type: CHANNEL_TYPES[0] as ChannelType,
         project: formData.project || '',
         start_date: formData.start_date || '',
         name: formData.name || '',
@@ -211,7 +211,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
           const channel = channelData[type];
           if (channel) {
             channelsArray.push({
-              type: channel.type || '',
+              type: (channel.type || CHANNEL_TYPES[0]) as ChannelType,
               project: formData.project,
               start_date: channel.start_date || formData.start_date || dayjs().format('YYYY-MM-DDTHH:mm:ss'),
               name: channel.name || formData.name,

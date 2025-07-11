@@ -16,7 +16,7 @@ import {
 import { DateTimePicker } from '@mui/x-date-pickers';
 import { InfoChannel, InfoChannelFormData, PromoEvent } from '../types';
 import dayjs from '../utils/dayjs';
-import { CHANNEL_TYPES } from '../constants/promoTypes';
+import { CHANNEL_TYPES, ChannelType } from '../constants/promoTypes';
 
 interface InfoChannelDialogProps {
   open: boolean;

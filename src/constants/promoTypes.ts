@@ -30,6 +30,9 @@ export const CHANNEL_TYPES = [
   'Новости'
 ] as const;
 
+// Строгая типизация для типов каналов
+export type ChannelType = typeof CHANNEL_TYPES[number];
+
 // Цвета для комбинаций тип+вид промо-событий
 export const PROMO_EVENT_COLORS: { [key: string]: string } = {
   // Турниры

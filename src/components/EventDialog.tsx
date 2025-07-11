@@ -23,7 +23,7 @@ import {
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import dayjs from '../utils/dayjs';
 import { PromoEvent, PromoEventCreate, PromoEventFormData, InfoChannel, InfoChannelCreate } from '../types';
-import { PROMO_TYPES, PROMO_KINDS, CHANNEL_TYPES } from '../constants/promoTypes';
+import { PROMO_TYPES, PROMO_KINDS, CHANNEL_TYPES, ChannelType } from '../constants/promoTypes';
 
 interface EventDialogProps {
   open: boolean;
@@ -129,9 +129,9 @@ const EventDialog: React.FC<EventDialogProps> = ({
       // Преобразуем каналы в формат для API
       const channelsArray: InfoChannelCreate[] = [];
       Object.values(channelData).forEach(channel => {
-        if (channel.type) {
+        if (channel.type && CHANNEL_TYPES.includes(channel.type as ChannelType)) {
           channelsArray.push({
-            type: channel.type,
+            type: channel.type as ChannelType,
             project: formData.project,
             start_date: channel.start_date || formData.start_date || dayjs().format('YYYY-MM-DDTHH:mm:ss'),
             name: channel.name || formData.name,
