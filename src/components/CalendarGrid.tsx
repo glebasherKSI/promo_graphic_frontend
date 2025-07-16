@@ -37,6 +37,7 @@ import {
   PROMO_EVENT_COLORS,
   CHANNEL_COLORS
 } from '../constants/promoTypes';
+import ProjectCalendarTable from './ProjectCalendarTable';
 
 // Праздничные дни РФ (ежегодные)
 const HOLIDAYS = [
@@ -207,7 +208,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                 Дата старта
               </Typography>
               <Typography variant="body2">
-                {dayjs(channel.start_date).format('DD.MM.YYYY HH:mm')}
+                {dayjs(channel.start_date).utc().format('DD.MM.YYYY HH:mm')}
               </Typography>
             </Box>
 
@@ -294,7 +295,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                 Даты проведения
               </Typography>
               <Typography variant="body2">
-                {`${dayjs(promoEvent.start_date).format('DD.MM.YYYY HH:mm')} - ${dayjs(promoEvent.end_date).format('DD.MM.YYYY HH:mm')}`}
+                {`${dayjs(promoEvent.start_date).utc().format('DD.MM.YYYY HH:mm')} - ${dayjs(promoEvent.end_date).utc().format('DD.MM.YYYY HH:mm')}`}
               </Typography>
             </Box>
 
@@ -333,12 +334,17 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   const getDaysArray = () => {
     const days = [];
     for (let i = 0; i < daysInMonth; i++) {
-      const date = firstDay.add(i, 'day');
+      // Используем dayjs.utc() для создания дат в UTC
+      const utcDate = dayjs.utc()
+        .year(selectedYear)
+        .month(selectedMonth - 1)
+        .date(i + 1)
+        .startOf('day');
       days.push({
         dayOfMonth: i + 1,
-        date: date,
-        dayOfWeek: date.format('dd').toUpperCase(),
-        isWeekend: isWeekend(date)
+        date: utcDate,
+        dayOfWeek: utcDate.format('dd').toUpperCase(),
+        isWeekend: isWeekend(utcDate)
       });
     }
     return days;
@@ -683,14 +689,83 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     handleCloseCellMenu();
   }, [selectedCellsData, onChannelCreate, handleCloseCellMenu]);
 
+  // Функция для генерации рекуррентных турниров
+  function generateRecurringEvents(event: PromoEvent) {
+    if (event.promo_type === 'Кэшбек') {
+      // Кэшбек: каждую неделю в тот же день недели и время, на год вперёд
+      const result: PromoEvent[] = [];
+      let currentStart = dayjs(event.start_date);
+      let currentEnd = dayjs(event.end_date);
+      const yearEnd = dayjs(event.start_date).add(1, 'year');
+      while (currentStart.isBefore(yearEnd)) {
+        result.push({
+          ...event,
+          start_date: currentStart.toISOString(),
+          end_date: currentEnd.toISOString()
+        });
+        currentStart = currentStart.add(1, 'week');
+        currentEnd = currentEnd.add(1, 'week');
+      }
+      return result;
+    }
+    // Турниры: регулярные — логика как раньше
+    const start = dayjs(event.start_date);
+    const end = dayjs(event.end_date);
+    const duration = end.diff(start, 'millisecond');
+    let currentStart = start;
+    const yearEnd = start.add(1, 'year');
+    const endTime = {
+      hour: end.hour(),
+      minute: end.minute(),
+      second: end.second(),
+      millisecond: end.millisecond(),
+    };
+    const result: PromoEvent[] = [];
+    while (currentStart.isBefore(yearEnd)) {
+      let currentEnd = currentStart.add(duration, 'millisecond')
+        .set('hour', endTime.hour)
+        .set('minute', endTime.minute)
+        .set('second', endTime.second)
+        .set('millisecond', endTime.millisecond);
+      result.push({
+        ...event,
+        start_date: currentStart.toISOString(),
+        end_date: currentEnd.toISOString()
+      });
+      currentStart = currentEnd;
+    }
+    return result;
+  }
+
+  const processedEvents = useMemo(() => {
+    let allEvents: PromoEvent[] = [];
+    for (const event of events) {
+      if (
+        (event.promo_type === 'Турниры' && event.promo_kind === 'Регулярные') ||
+        event.promo_type === 'Кэшбек'
+      ) {
+        allEvents = allEvents.concat(generateRecurringEvents(event));
+      } else {
+        allEvents.push(event);
+      }
+    }
+    // Фильтруем только события, которые попадают в выбранный месяц
+    const monthStart = dayjs().year(selectedYear).month(selectedMonth - 1).startOf('month');
+    const monthEnd = monthStart.endOf('month');
+    return allEvents.filter(ev => {
+      const evStart = dayjs(ev.start_date);
+      const evEnd = dayjs(ev.end_date);
+      // Событие попадает в месяц, если оно хотя бы частично пересекается с выбранным месяцем
+      return evEnd.isSameOrAfter(monthStart) && evStart.isSameOrBefore(monthEnd);
+    });
+  }, [events, selectedMonth, selectedYear]);
+
   return (
     <>
       <TableContainer 
         component={Paper} 
         onClick={handleTableClick}
         onContextMenu={(e) => {
-          // Предотвращаем стандартное контекстное меню и всплытие события
-          // если клик был не по ячейке
           const target = e.target as HTMLElement;
           if (!target.closest('.calendar-cell-selectable')) {
             e.preventDefault();
@@ -716,377 +791,32 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
             <CircularProgress />
           </Box>
         )}
-        <Table 
-          ref={tableRef}
-          stickyHeader 
-          size="small" 
-          sx={{ tableLayout: 'fixed' }}
-        >
-          <TableHead>
-            <TableRow>
-              <TableCell 
-                sx={{ 
-                  width: '160px', 
-                  bgcolor: '#333a56',
-                  position: 'sticky',
-                  left: 0,
-                  zIndex: 2,
-                  borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
-                  p: 1
-                }}
-              >
-                Проект / Тип
-              </TableCell>
-              {days.map(({ dayOfMonth, dayOfWeek, isWeekend }) => (
-                <TableCell
-                  key={dayOfMonth}
-                  align="center"
-                  sx={{
-                    width: '35px',
-                    minWidth: '35px',
-                    maxWidth: '35px',
-                    bgcolor: isWeekend ? '#444a66' : '#333a56',
-                    color: isWeekend ? '#ff6b6b' : 'inherit',
-                    borderLeft: '1px solid rgba(255, 255, 255, 0.12)',
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
-                    p: 0.25
-                  }}
-                >
-                  <Typography variant="body2" sx={{ fontSize: '0.7rem', lineHeight: 1 }}>{dayOfMonth}</Typography>
-                  <Typography variant="caption" sx={{ fontSize: '0.65rem', lineHeight: 1 }}>{dayOfWeek}</Typography>
-                </TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {selectedProjects.map((project, projectIndex) => (
-              <React.Fragment key={project}>
-                {projectIndex > 0 && (
-                  <TableRow>
-                    <TableCell
-                      colSpan={daysInMonth + 1}
-                      sx={{
-                        height: '8px',
-                        bgcolor: '#1a1f35',
-                        borderBottom: '2px solid #1a1f35',
-                        p: 0
-                      }}
-                    />
-                  </TableRow>
-                )}
-                
-                {/* Строка с названием проекта */}
-                <TableRow>
-                  <TableCell
-                    component="th"
-                    scope="row"
-                    sx={{
-                      bgcolor: '#333a56',
-                      position: 'sticky',
-                      left: 0,
-                      zIndex: 1,
-                      fontWeight: 'bold',
-                      borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
-                      fontSize: '0.9rem',
-                      py: 1,
-                      height: '32px'
-                    }}
-                  >
-                    {project}
-                  </TableCell>
-                  {days.map(({ dayOfMonth, isWeekend }) => (
-                    <TableCell
-                      key={dayOfMonth}
-                      sx={{
-                        bgcolor: isWeekend ? '#444a66' : '#333a56',
-                        borderLeft: '1px solid rgba(255, 255, 255, 0.12)',
-                        borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
-                        p: 0,
-                        height: '32px'
-                      }}
-                    />
-                  ))}
-                </TableRow>
-                
-                {/* Строки с типами промо */}
-                {PROMO_TYPES.map(promoType => {
-                  // Получаем все события данного типа для проекта
-                  const typeEvents = events.filter(event => 
-                    event.project === project && 
-                    event.promo_type === promoType
-                  );
-
-                  // Определяем количество необходимых строк для этого типа
-                  const rows: PromoEvent[][] = [];
-                  typeEvents.forEach(event => {
-                    const eventStart = dayjs(event.start_date);
-                    const eventEnd = dayjs(event.end_date);
-                    
-                    let foundRow = false;
-                    for (let i = 0; i < rows.length; i++) {
-                      const hasIntersection = rows[i].some(existingEvent => {
-                        const existingStart = dayjs(existingEvent.start_date);
-                        const existingEnd = dayjs(existingEvent.end_date);
-                        return (
-                          (eventStart.isBefore(existingEnd) || eventStart.isSame(existingEnd)) &&
-                          (eventEnd.isAfter(existingStart) || eventEnd.isSame(existingStart))
-                        );
-                      });
-
-                      if (!hasIntersection) {
-                        rows[i].push(event);
-                        foundRow = true;
-                        break;
-                      }
-                    }
-
-                    if (!foundRow) {
-                      rows.push([event]);
-                    }
-                  });
-
-                  const rowCount = Math.max(1, rows.length);
-                  // Добавляем дополнительную высоту для отступов
-                  const blockHeight = rowCount * 24 + (rowCount > 1 ? (rowCount - 1) * 8 : 0) + 8;
-
-                  return (
-                    <TableRow key={`${project}-${promoType}`}>
-                      <TableCell
-                        sx={{
-                          position: 'sticky',
-                          left: 0,
-                          zIndex: 1,
-                          bgcolor: '#333a56',
-                          pl: 2,
-                          fontSize: '0.8rem',
-                          borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
-                          height: `${blockHeight}px`,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }}
-                      >
-                        {promoType}
-                      </TableCell>
-                      {days.map(({ dayOfMonth, date, isWeekend }) => {
-                        // Находим все события для текущего дня
-                        const dayEvents = events.filter(event => {
-                          if (event.project !== project || event.promo_type !== promoType) return false;
-                          const startDate = dayjs(event.start_date);
-                          const endDate = dayjs(event.end_date);
-                          return date.isBetween(startDate, endDate, 'day', '[]');
-                        });
-
-                        // Определяем строку для каждого события
-                        const eventsWithRows = dayEvents.map(event => {
-                          const rowIndex = rows.findIndex(row => row.includes(event));
-                          return {
-                            ...event,
-                            rowIndex: rowIndex !== -1 ? rowIndex : 0
-                          };
-                        });
-
-                        const cellKey = getCellKey(project, promoType, dayOfMonth);
-                        const isSelected = isCellSelected(cellKey);
-
-                        return (
-                          <TableCell
-                            key={dayOfMonth}
-                            data-cell-key={cellKey}
-                            onClick={(e) => handleCellClick(cellKey, e)}
-                            onContextMenu={(e) => handleCellRightClick(cellKey, e)}
-                            onMouseDown={(e) => handleCellMouseDown(cellKey, e)}
-                            onMouseEnter={(e) => handleCellMouseEnter(cellKey, e)}
-                            className={`calendar-cell-selectable ${isCellSelected(cellKey) ? 'calendar-cell-selected' : ''}`}
-                            sx={{
-                              height: `${blockHeight}px`,
-                              p: 0.25,
-                              bgcolor: isWeekend ? '#444a66' : '#333a56',
-                              borderLeft: '1px solid rgba(255, 255, 255, 0.12)',
-                              borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
-                              verticalAlign: 'top',
-                              position: 'relative',
-                              '&:hover': {
-                                bgcolor: isWeekend ? '#4a5066' : '#3a4066'
-                              }
-                            }}
-                          >
-                            <Stack spacing={0.25}>
-                              {eventsWithRows.map((event, index) => (
-                                <Box
-                                  key={`${event.id}-${index}`}
-                                  sx={{
-                                    position: 'absolute',
-                                    top: `${event.rowIndex * 32}px`, // Увеличиваем расстояние между событиями
-                                    left: 1,
-                                    right: 1,
-                                    padding: '4px 0' // Добавляем вертикальные отступы
-                                  }}
-                                >
-                                  <Tooltip
-                                    title={getEventTooltipContent(event, false)}
-                                    placement="right"
-                                    arrow
-                                    PopperProps={{
-                                      sx: {
-                                        '& .MuiTooltip-tooltip': {
-                                          bgcolor: '#333a56',
-                                          color: '#eff0f1',
-                                          p: 0,
-                                          maxWidth: 'none'
-                                        },
-                                        '& .MuiTooltip-arrow': {
-                                          color: '#333a56'
-                                        }
-                                      }
-                                    }}
-                                  >
-                                    <Chip
-                                      label={event.promo_type}
-                                      size="small"
-                                      sx={{
-                                        backgroundColor: getEventColor(event.promo_type, event.promo_kind),
-                                        color: '#000',
-                                        fontSize: '0.7rem',
-                                        height: 20,
-                                        width: '100%',
-                                        '& .MuiChip-label': {
-                                          px: 1,
-                                        },
-                                        ...(highlightedEventId === event.id && pulseAnimation),
-                                      }}
-                                      onContextMenu={(e: React.MouseEvent) => handleContextMenu(e, event, false)}
-                                      onClick={(e: React.MouseEvent) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                      }}
-                                      onMouseEnter={() => setHighlightedEventId(event.id)}
-                                      onMouseLeave={() => setHighlightedEventId(null)}
-                                    />
-                                  </Tooltip>
-                                </Box>
-                              ))}
-                            </Stack>
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  );
-                })}
-                
-                {/* Строки с каналами информирования */}
-                {CHANNEL_TYPES.map(channelType => (
-                  <TableRow key={`${project}-${channelType}`} sx={{ height: '32px' }}>
-                    <TableCell
-                      sx={{
-                        position: 'sticky',
-                        left: 0,
-                        zIndex: 1,
-                        bgcolor: '#333a56',
-                        pl: 2,
-                        fontSize: '0.8rem',
-                        borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
-                        height: '32px',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}
-                    >
-                      {channelType}
-                    </TableCell>
-                    {days.map(({ dayOfMonth, date, isWeekend }) => {
-                      const channels = events
-                        .filter(event => event.project === project)
-                        .flatMap(event => 
-                          (event.info_channels || []).map(channel => ({
-                            ...channel,
-                            eventId: event.id,
-                            eventName: event.name
-                          }))
-                        )
-                        .filter(channel => {
-                          if (!channel || channel.type !== channelType) return false;
-                          const channelDate = dayjs(channel.start_date);
-                          return channelDate.isSame(date, 'day');
-                        });
-
-                      const cellKey = getCellKey(project, channelType, dayOfMonth);
-
-                      return (
-                        <TableCell
-                          key={dayOfMonth}
-                          data-cell-key={cellKey}
-                          onClick={(e) => handleCellClick(cellKey, e)}
-                          onContextMenu={(e) => handleCellRightClick(cellKey, e)}
-                          onMouseDown={(e) => handleCellMouseDown(cellKey, e)}
-                          onMouseEnter={(e) => handleCellMouseEnter(cellKey, e)}
-                          className={`calendar-cell-selectable ${isCellSelected(cellKey) ? 'calendar-cell-selected' : ''}`}
-                          sx={{
-                            height: '32px',
-                            p: 0.25,
-                            bgcolor: isWeekend ? '#444a66' : '#333a56',
-                            borderLeft: '1px solid rgba(255, 255, 255, 0.12)',
-                            borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
-                            verticalAlign: 'top',
-                            '&:hover': {
-                              bgcolor: isWeekend ? '#4a5066' : '#3a4066'
-                            }
-                          }}
-                        >
-                          <Stack spacing={0.25}>
-                            {channels.map((channel, index) => (
-                              <Tooltip
-                                key={`${channel.id}-${index}`}
-                                title={getEventTooltipContent(channel, true)}
-                                placement="right"
-                                arrow
-                                PopperProps={{
-                                  sx: {
-                                    '& .MuiTooltip-tooltip': {
-                                      bgcolor: '#333a56',
-                                      color: '#eff0f1',
-                                      p: 0,
-                                      maxWidth: 'none'
-                                    },
-                                    '& .MuiTooltip-arrow': {
-                                      color: '#333a56'
-                                    }
-                                  }
-                                }}
-                              >
-                                <Chip
-                                  label={channel.type}
-                                  size="small"
-                                  sx={{
-                                    backgroundColor: getChannelColor(channel.type),
-                                    color: '#000',
-                                    fontSize: '0.7rem',
-                                    height: 20,
-                                    '& .MuiChip-label': {
-                                      px: 1,
-                                    },
-                                    ...(highlightedEventId === channel.eventId && pulseAnimation),
-                                  }}
-                                  onContextMenu={(e: React.MouseEvent) => handleContextMenu(e, channel, true)}
-                                  onClick={(e: React.MouseEvent) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                  }}
-                                  onMouseEnter={() => setHighlightedEventId(channel.eventId)}
-                                  onMouseLeave={() => setHighlightedEventId(null)}
-                                />
-                              </Tooltip>
-                            ))}
-                          </Stack>
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                ))}
-              </React.Fragment>
-            ))}
-          </TableBody>
-        </Table>
+        {selectedProjects.map((project, projectIndex) => (
+          <ProjectCalendarTable
+            key={project}
+            project={project}
+            projectIndex={projectIndex}
+            events={processedEvents}
+            days={days}
+            daysInMonth={daysInMonth}
+            PROMO_TYPES={PROMO_TYPES}
+            CHANNEL_TYPES={CHANNEL_TYPES}
+            getEventColor={getEventColor}
+            getChannelColor={getChannelColor}
+            isCellSelected={isCellSelected}
+            handleCellClick={handleCellClick}
+            handleCellRightClick={handleCellRightClick}
+            handleCellMouseDown={handleCellMouseDown}
+            handleCellMouseEnter={handleCellMouseEnter}
+            getCellKey={getCellKey}
+            handleContextMenu={handleContextMenu}
+            highlightedEventId={highlightedEventId}
+            setHighlightedEventId={setHighlightedEventId}
+            getEventTooltipContent={getEventTooltipContent}
+            pulseAnimation={pulseAnimation}
+            isAdmin={isAdmin}
+          />
+        ))}
       </TableContainer>
 
       <Menu

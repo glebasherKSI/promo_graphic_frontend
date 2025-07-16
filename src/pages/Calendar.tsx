@@ -71,6 +71,14 @@ const Calendar: React.FC<CalendarProps> = ({
 
   // Фильтрация событий по выбранным проектам и месяцу
   const filteredEvents = events.filter(event => {
+    // Для регулярных турниров и кешбэка всегда возвращаем true
+    
+    if (
+      (event.promo_type === 'Турниры' && event.promo_kind === 'Регулярные') ||
+      event.promo_type === 'Кэшбек'
+    ) {
+      return true;
+    }
     const eventStartDate = dayjs(event.start_date);
     const eventEndDate = dayjs(event.end_date);
     const startOfMonth = dayjs().year(selectedYear).month(selectedMonth - 1).startOf('month');
@@ -144,6 +152,17 @@ const Calendar: React.FC<CalendarProps> = ({
                 </Box>
               )}
             >
+              <ListSubheader>
+                <Box sx={{ display: 'flex', gap: 1, p: 1 }}>
+                  <Button size="small" onClick={(e) => { e.stopPropagation(); setSelectedProjects([]); }}>
+                    Снять все
+                  </Button>
+                  <Button size="small" onClick={(e) => { e.stopPropagation(); setSelectedProjects(PROJECTS); }}>
+                    Выделить все
+                  </Button>
+                </Box>
+              </ListSubheader>
+              <Divider />
               {PROJECTS.map((project) => (
                 <MenuItem key={project} value={project}>
                   {project}
