@@ -9,8 +9,12 @@ import {
   Stack,
   Box,
   Tooltip,
-  Chip
+  Chip,
+  IconButton,
+  Collapse
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import dayjs from '../utils/dayjs';
 import { PromoEvent, InfoChannel } from '../types';
 
@@ -36,6 +40,9 @@ interface ProjectCalendarTableProps {
   getEventTooltipContent: (event: PromoEvent | InfoChannel, isChannel?: boolean) => React.ReactNode;
   pulseAnimation: any;
   isAdmin: boolean;
+  tableRef: React.RefObject<HTMLTableElement>;
+  collapsedPromoTypes: {[projectType: string]: boolean};
+  togglePromoTypeCollapse: (project: string, promoType: string) => void;
 }
 
 const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
@@ -59,10 +66,14 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
   setHighlightedEventId,
   getEventTooltipContent,
   pulseAnimation,
-  isAdmin
+  isAdmin,
+  tableRef,
+  collapsedPromoTypes,
+  togglePromoTypeCollapse
 }) => {
   return (
     <Table
+      ref={tableRef}
       stickyHeader
       size="small"
       sx={{ tableLayout: 'fixed', mb: 3 }}
@@ -76,7 +87,7 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
               position: 'sticky',
               left: 0,
               zIndex: 2,
-              borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+              borderBottom: '2px solid rgba(255, 255, 255, 0.3)',
               p: 1
             }}
           >
@@ -92,8 +103,8 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
                 maxWidth: '35px',
                 bgcolor: isWeekend ? '#444a66' : '#333a56',
                 color: isWeekend ? '#ff6b6b' : 'inherit',
-                borderLeft: '1px solid rgba(255, 255, 255, 0.12)',
-                borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+                borderLeft: '1px solid rgba(255, 255, 255, 0.25)',
+                borderBottom: '2px solid rgba(255, 255, 255, 0.3)',
                 p: 0.25
               }}
             >
@@ -110,8 +121,8 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
               colSpan={daysInMonth + 1}
               sx={{
                 height: '8px',
-                bgcolor: '#1a1f35',
-                borderBottom: '2px solid #1a1f35',
+                bgcolor: '#232B45',
+                borderBottom: '2px solid #232B45',
                 p: 0
               }}
             />
@@ -128,7 +139,7 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
               left: 0,
               zIndex: 1,
               fontWeight: 'bold',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+              borderBottom: '2px solid rgba(255, 255, 255, 0.3)',
               fontSize: '0.9rem',
               py: 1,
               height: '32px'
@@ -141,8 +152,8 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
               key={dayOfMonth}
               sx={{
                 bgcolor: isWeekend ? '#444a66' : '#333a56',
-                borderLeft: '1px solid rgba(255, 255, 255, 0.12)',
-                borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+                borderLeft: '1px solid rgba(255, 255, 255, 0.25)',
+                borderBottom: '2px solid rgba(255, 255, 255, 0.3)',
                 p: 0,
                 height: '32px'
               }}
@@ -150,7 +161,7 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
           ))}
         </TableRow>
         {/* Строки с типами промо */}
-        {PROMO_TYPES.map(promoType => {
+        {PROMO_TYPES.map((promoType, promoTypeIdx) => {
           // Получаем все события данного типа для проекта
           const typeEvents = events.filter(event =>
             event.project === project &&
@@ -188,27 +199,51 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
 
           const rowCount = Math.max(1, rows.length);
           const blockHeight = rowCount * 24 + (rowCount > 1 ? (rowCount - 1) * 8 : 0) + 8;
+          const isCollapsed = collapsedPromoTypes[`${project}-${promoType}`] || false;
+          const displayHeight = isCollapsed ? 32 : blockHeight;
 
           return (
-            <TableRow key={`${project}-${promoType}`}>
+            <TableRow key={`${project}-${promoType}`}
+              sx={{ bgcolor: promoTypeIdx % 2 === 0 ? '#161E2F' : '#242F49' }}
+            >
               <TableCell
                 sx={{
                   position: 'sticky',
                   left: 0,
                   zIndex: 1,
                   bgcolor: '#333a56',
-                  pl: 2,
+                  pl: 1,
                   fontSize: '0.8rem',
-                  borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
-                  height: `${blockHeight}px`,
+                  borderBottom: '2px solid rgba(255, 255, 255, 0.3)',
+                  height: `${displayHeight}px`,
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
-                  textOverflow: 'ellipsis'
+                  textOverflow: 'ellipsis',
+                  cursor: 'pointer',
+                  transition: 'height 0.3s ease-in-out',
+                  '&:hover': {
+                    bgcolor: '#3a4066'
+                  }
                 }}
+                onClick={() => togglePromoTypeCollapse(project, promoType)}
               >
-                {promoType}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <IconButton
+                    size="small"
+                    sx={{ 
+                      color: '#fff', 
+                      p: 0.25,
+                      transition: 'transform 0.2s ease-in-out'
+                    }}
+                  >
+                    {isCollapsed ? <ChevronRightIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                  </IconButton>
+                  <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
+                    {promoType}
+                  </Typography>
+                </Box>
               </TableCell>
-              {days.map(({ dayOfMonth, date, isWeekend }) => {
+              {days.map(({ dayOfMonth, date, isWeekend }, dayIdx) => {
                 // Находим все события для текущего дня
                 const dayEvents = events.filter(event => {
                   if (event.project !== project || event.promo_type !== promoType) return false;
@@ -248,74 +283,22 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
                     onMouseEnter={(e) => handleCellMouseEnter(cellKey, e)}
                     className={`calendar-cell-selectable ${isCellSelected(cellKey) ? 'calendar-cell-selected' : ''}`}
                     sx={{
-                      height: `${blockHeight}px`,
+                      height: `${displayHeight}px`,
                       p: 0.25,
                       bgcolor: isWeekend ? '#444a66' : '#333a56',
-                      borderLeft: '1px solid rgba(255, 255, 255, 0.12)',
-                      borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+                      borderLeft: '1px solid rgba(255, 255, 255, 0.25)',
+                      borderBottom: '2px solid rgba(255, 255, 255, 0.3)',
                       verticalAlign: 'top',
                       position: 'relative',
+                      transition: 'height 0.3s ease-in-out',
+                      overflow: 'hidden',
                       '&:hover': {
                         bgcolor: isWeekend ? '#4a5066' : '#3a4066'
                       }
                     }}
                   >
-                    <Stack spacing={0.25}>
-                      {eventsWithRows.map((event, index) => (
-                        <Box
-                          key={`${event.id}-${index}`}
-                          sx={{
-                            position: 'absolute',
-                            top: `${event.rowIndex * 32}px`,
-                            left: 1,
-                            right: 1,
-                            padding: '4px 0'
-                          }}
-                        >
-                          <Tooltip
-                            title={getEventTooltipContent(event, false)}
-                            placement="right"
-                            arrow
-                            PopperProps={{
-                              sx: {
-                                '& .MuiTooltip-tooltip': {
-                                  bgcolor: '#333a56',
-                                  color: '#eff0f1',
-                                  p: 0,
-                                  maxWidth: 'none'
-                                },
-                                '& .MuiTooltip-arrow': {
-                                  color: '#333a56'
-                                }
-                              }
-                            }}
-                          >
-                            <Chip
-                              label={event.promo_type}
-                              size="small"
-                              sx={{
-                                backgroundColor: getEventColor(event.promo_type, event.promo_kind),
-                                color: '#000',
-                                fontSize: '0.7rem',
-                                height: 20,
-                                width: '100%',
-                                '& .MuiChip-label': {
-                                  px: 1,
-                                },
-                                ...(highlightedEventId === event.id && pulseAnimation),
-                              }}
-                              onContextMenu={(e: React.MouseEvent) => handleContextMenu(e, event, false)}
-                              onClick={(e: React.MouseEvent) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                              }}
-                              onMouseEnter={() => setHighlightedEventId(event.id)}
-                              onMouseLeave={() => setHighlightedEventId(null)}
-                            />
-                          </Tooltip>
-                        </Box>
-                      ))}
-                    </Stack>
+                    {/* Промо события теперь отображаются как полосы в EventBarsLayer, 
+                         здесь оставляем только пустое пространство для взаимодействия */}
                   </TableCell>
                 );
               })}
@@ -323,17 +306,18 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
           );
         })}
         {/* Строки с каналами информирования */}
-        {CHANNEL_TYPES.map(channelType => (
-          <TableRow key={`${project}-${channelType}`} sx={{ height: '32px' }}>
+        {CHANNEL_TYPES.map((channelType, channelTypeIdx) => (
+          <TableRow key={`${project}-${channelType}`} sx={{ height: '32px', bgcolor: channelTypeIdx % 2 === 0 ? '#161E2F' : '#242F49' }}>
             <TableCell
               sx={{
                 position: 'sticky',
                 left: 0,
                 zIndex: 1,
                 bgcolor: '#333a56',
+                color: '#fff',
                 pl: 2,
                 fontSize: '0.8rem',
-                borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+                borderBottom: '2px solid rgba(255, 255, 255, 0.3)',
                 height: '32px',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -375,8 +359,8 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
                     height: '32px',
                     p: 0.25,
                     bgcolor: isWeekend ? '#444a66' : '#333a56',
-                    borderLeft: '1px solid rgba(255, 255, 255, 0.12)',
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderLeft: '1px solid rgba(255, 255, 255, 0.25)',
+                    borderBottom: '2px solid rgba(255, 255, 255, 0.3)',
                     verticalAlign: 'top',
                     '&:hover': {
                       bgcolor: isWeekend ? '#4a5066' : '#3a4066'

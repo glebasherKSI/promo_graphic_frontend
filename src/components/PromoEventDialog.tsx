@@ -82,8 +82,8 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
         name: event.name,
         comment: event.comment,
         segments: event.segments,
-        start_date: event.start_date,
-        end_date: event.end_date,
+        start_date: dayjs(event.start_date).utc().format('YYYY-MM-DDTHH:mm:ss'),
+        end_date: dayjs(event.end_date).utc().format('YYYY-MM-DDTHH:mm:ss'),
         link: event.link || ''
       });
 
@@ -95,7 +95,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
         const channelObj = event.info_channels.reduce((acc, channel) => {
           acc[channel.type] = {
             type: channel.type,
-            start_date: channel.start_date,
+            start_date: dayjs(channel.start_date).utc().format('YYYY-MM-DDTHH:mm:ss'),
             name: channel.name || '',
             segments: channel.segments,
             comment: channel.comment || '',
@@ -152,7 +152,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
     const newChannel: InfoChannelCreate = {
       type: CHANNEL_TYPES[0],
       project: formData.project || '',
-      start_date: formData.start_date || dayjs().format('YYYY-MM-DDTHH:mm:ss'),
+      start_date: formData.start_date || dayjs.utc().format('YYYY-MM-DDTHH:mm:ss'),
       name: formData.name || '',
       segments: formData.segments || 'СНГ',
       comment: '',
@@ -213,7 +213,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
             channelsArray.push({
               type: (channel.type || CHANNEL_TYPES[0]) as ChannelType,
               project: formData.project,
-              start_date: channel.start_date || formData.start_date || dayjs().format('YYYY-MM-DDTHH:mm:ss'),
+              start_date: channel.start_date || formData.start_date || dayjs.utc().format('YYYY-MM-DDTHH:mm:ss'),
               name: channel.name || formData.name,
               segments: channel.segments || formData.segments || 'СНГ',
               comment: channel.comment || '',
@@ -238,8 +238,8 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
         name: formData.name,
         comment: formData.comment || '',
         segments: formData.segments || 'СНГ',
-        start_date: formData.start_date || dayjs().format('YYYY-MM-DDTHH:mm:ss'),
-        end_date: formData.end_date || dayjs().add(1, 'day').format('YYYY-MM-DDTHH:mm:ss'),
+        start_date: formData.start_date || dayjs.utc().format('YYYY-MM-DDTHH:mm:ss'),
+        end_date: formData.end_date || dayjs.utc().add(1, 'day').format('YYYY-MM-DDTHH:mm:ss'),
         link: formData.link || '',
         info_channels: channelsArray
       };
@@ -269,7 +269,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
 
   // Функция для форматирования даты
   const formatDate = (date: string) => {
-    return dayjs(date).format('DD.MM.YYYY HH:mm');
+    return dayjs.utc(date).format('DD.MM.YYYY HH:mm');
   };
 
   const handleDelete = async () => {
@@ -419,8 +419,9 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
             <Box sx={{ display: 'flex', gap: 2 }}>
               <DateTimePicker
                 label="Дата начала *"
-                value={formData.start_date ? dayjs(formData.start_date) : null}
-                onChange={(value) => handleChange('start_date', value ? value.format('YYYY-MM-DDTHH:mm:ss') : null)}
+                value={formData.start_date ? dayjs.utc(formData.start_date) : null}
+                onChange={(value) => handleChange('start_date', value ? value.utc().format('YYYY-MM-DDTHH:mm:ss') : null)}
+                format="DD-MM-YYYY HH:mm"
                 slotProps={{
                   textField: {
                     fullWidth: true,
@@ -430,8 +431,9 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
               />
               <DateTimePicker
                 label="Дата окончания *"
-                value={formData.end_date ? dayjs(formData.end_date) : null}
-                onChange={(value) => handleChange('end_date', value ? value.format('YYYY-MM-DDTHH:mm:ss') : null)}
+                value={formData.end_date ? dayjs.utc(formData.end_date) : null}
+                onChange={(value) => handleChange('end_date', value ? value.utc().format('YYYY-MM-DDTHH:mm:ss') : null)}
+                format="DD-MM-YYYY HH:mm"
                 slotProps={{
                   textField: {
                     fullWidth: true,
@@ -531,8 +533,9 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
                       </FormControl>
                       <DateTimePicker
                         label="Дата старта"
-                        value={channel.start_date ? dayjs(channel.start_date) : null}
-                        onChange={(value) => handleChannelChange(index, 'start_date', value ? value.format('YYYY-MM-DDTHH:mm:ss') : null)}
+                        value={channel.start_date ? dayjs.utc(channel.start_date) : null}
+                        onChange={(value) => handleChannelChange(index, 'start_date', value ? value.utc().format('YYYY-MM-DDTHH:mm:ss') : null)}
+                        format="DD-MM-YYYY HH:mm"
                         slotProps={{
                           textField: {
                             fullWidth: true

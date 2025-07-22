@@ -38,6 +38,7 @@ import {
   CHANNEL_COLORS
 } from '../constants/promoTypes';
 import ProjectCalendarTable from './ProjectCalendarTable';
+import EventBarsLayer from './EventBarsLayer';
 
 // Праздничные дни РФ (ежегодные)
 const HOLIDAYS = [
@@ -120,9 +121,27 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartCell, setDragStartCell] = useState<string | null>(null);
   
+  // Состояние для отслеживания свернутых типов промо по проектам
+  const [collapsedPromoTypes, setCollapsedPromoTypes] = useState<{[projectType: string]: boolean}>({});
+  
+  // Состояние для принудительного обновления позиций полос
+  const [forcePositionUpdate, setForcePositionUpdate] = useState(0);
+  
   // Ref для отслеживания выделенных ячеек без ререндера
   const selectedCellsRef = useRef<Set<string>>(new Set());
   const tableRef = useRef<HTMLTableElement>(null);
+  
+  // Создаем refs для каждого проекта
+  const projectTableRefs = useRef<{[key: string]: React.RefObject<HTMLTableElement>}>({});
+  
+  // Инициализируем refs для выбранных проектов
+  selectedProjects.forEach(project => {
+    if (!projectTableRefs.current[project]) {
+      projectTableRefs.current[project] = React.createRef<HTMLTableElement>();
+    }
+  });
+
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   // CSS стили для выделенных ячеек (добавляем в head)
   React.useEffect(() => {
@@ -182,6 +201,20 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     type: channel.type,
     segment: Array.isArray(channel.segments) ? channel.segments.join(', ') : channel.segments
   }), []);
+
+  // Функция для переключения сворачивания типа промо
+  const togglePromoTypeCollapse = useCallback((project: string, promoType: string) => {
+    const key = `${project}-${promoType}`;
+    setCollapsedPromoTypes(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+    
+    // Принудительно обновляем позиции полос
+    setTimeout(() => {
+      setForcePositionUpdate(prev => prev + 1);
+    }, 50);
+  }, []);
 
   // Функция для форматирования информации о событии
   const getEventTooltipContent = (event: PromoEvent | InfoChannel, isChannel = false) => {
@@ -448,7 +481,12 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     handleCloseMenu();
   }, [selectedEvent, onChannelEdit, onEventEdit]);
 
-  const handleDelete = useCallback(async () => {
+  const handleDeleteClick = useCallback(() => {
+    setConfirmDeleteOpen(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    setConfirmDeleteOpen(false);
     if (selectedEvent) {
       try {
         setIsDeleting(true);
@@ -465,7 +503,11 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
         handleCloseMenu();
       }
     }
-  }, [selectedEvent, loadEvents]);
+  }, [selectedEvent, loadEvents, handleCloseMenu]);
+
+  const handleCancelDelete = useCallback(() => {
+    setConfirmDeleteOpen(false);
+  }, []);
 
   const days = getDaysArray();
 
@@ -708,7 +750,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       }
       return result;
     }
-    // Турниры: регулярные — логика как раньше
+    // Турниры и Лотереи: регулярные — логика одинаковая (подряд без перерывов)
     const start = dayjs(event.start_date);
     const end = dayjs(event.end_date);
     const duration = end.diff(start, 'millisecond');
@@ -742,6 +784,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     for (const event of events) {
       if (
         (event.promo_type === 'Турниры' && event.promo_kind === 'Регулярные') ||
+        (event.promo_type === 'Лотереи' && event.promo_kind === 'Регулярные') ||
         event.promo_type === 'Кэшбек'
       ) {
         allEvents = allEvents.concat(generateRecurringEvents(event));
@@ -771,7 +814,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
             e.preventDefault();
           }
         }}
-        sx={{ position: 'relative' }}
+        sx={{ position: 'relative', backgroundColor: '#161e2f' }}
       >
         {loading && (
           <Box
@@ -791,32 +834,57 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
             <CircularProgress />
           </Box>
         )}
-        {selectedProjects.map((project, projectIndex) => (
-          <ProjectCalendarTable
-            key={project}
-            project={project}
-            projectIndex={projectIndex}
-            events={processedEvents}
-            days={days}
-            daysInMonth={daysInMonth}
-            PROMO_TYPES={PROMO_TYPES}
-            CHANNEL_TYPES={CHANNEL_TYPES}
-            getEventColor={getEventColor}
-            getChannelColor={getChannelColor}
-            isCellSelected={isCellSelected}
-            handleCellClick={handleCellClick}
-            handleCellRightClick={handleCellRightClick}
-            handleCellMouseDown={handleCellMouseDown}
-            handleCellMouseEnter={handleCellMouseEnter}
-            getCellKey={getCellKey}
-            handleContextMenu={handleContextMenu}
-            highlightedEventId={highlightedEventId}
-            setHighlightedEventId={setHighlightedEventId}
-            getEventTooltipContent={getEventTooltipContent}
-            pulseAnimation={pulseAnimation}
-            isAdmin={isAdmin}
-          />
-        ))}
+        {selectedProjects.map((project, projectIndex) => {
+          const currentTableRef = projectTableRefs.current[project];
+          return (
+            <Box key={project} sx={{ position: 'relative' }}>
+              <ProjectCalendarTable
+                project={project}
+                projectIndex={projectIndex}
+                events={processedEvents}
+                days={days}
+                daysInMonth={daysInMonth}
+                PROMO_TYPES={PROMO_TYPES}
+                CHANNEL_TYPES={CHANNEL_TYPES}
+                getEventColor={getEventColor}
+                getChannelColor={getChannelColor}
+                isCellSelected={isCellSelected}
+                handleCellClick={handleCellClick}
+                handleCellRightClick={handleCellRightClick}
+                handleCellMouseDown={handleCellMouseDown}
+                handleCellMouseEnter={handleCellMouseEnter}
+                getCellKey={getCellKey}
+                handleContextMenu={handleContextMenu}
+                highlightedEventId={highlightedEventId}
+                setHighlightedEventId={setHighlightedEventId}
+                getEventTooltipContent={getEventTooltipContent}
+                pulseAnimation={pulseAnimation}
+                isAdmin={isAdmin}
+                tableRef={currentTableRef}
+                collapsedPromoTypes={collapsedPromoTypes}
+                togglePromoTypeCollapse={togglePromoTypeCollapse}
+              />
+              <EventBarsLayer
+                project={project}
+                events={processedEvents}
+                days={days}
+                selectedMonth={selectedMonth}
+                selectedYear={selectedYear}
+                PROMO_TYPES={PROMO_TYPES}
+                getEventColor={getEventColor}
+                handleContextMenu={handleContextMenu}
+                highlightedEventId={highlightedEventId}
+                setHighlightedEventId={setHighlightedEventId}
+                getEventTooltipContent={getEventTooltipContent}
+                pulseAnimation={pulseAnimation}
+                tableRef={currentTableRef}
+                projectIndex={projectIndex}
+                collapsedPromoTypes={collapsedPromoTypes}
+                forcePositionUpdate={forcePositionUpdate}
+              />
+            </Box>
+          );
+        })}
       </TableContainer>
 
       <Menu
@@ -844,7 +912,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
             </MenuItem>
             {auth.user?.role === 'admin' && (
               <MenuItem 
-                onClick={handleDelete} 
+                onClick={handleDeleteClick} 
                 sx={{ 
                   color: '#ff6b6b',
                   display: 'flex',
@@ -895,6 +963,22 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
           </>
         )}
       </Menu>
+
+      {/* Диалог подтверждения удаления */}
+      <Dialog open={confirmDeleteOpen} onClose={handleCancelDelete}>
+        <DialogTitle>Подтвердите удаление</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Вы уверены, что хотите удалить это событие? Это действие необратимо.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelDelete} disabled={isDeleting}>Отмена</Button>
+          <Button onClick={handleConfirmDelete} color="error" variant="contained" disabled={isDeleting}>
+            {isDeleting ? <CircularProgress size={20} sx={{ ml: 1 }} /> : 'Удалить'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

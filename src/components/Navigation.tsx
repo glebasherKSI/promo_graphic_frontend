@@ -1,6 +1,7 @@
 import React from 'react';
 import { Tabs, Tab, Box } from '@mui/material';
 import { Link, useLocation } from 'react-router-dom';
+import { FEATURE_FLAGS } from '../constants/promoTypes';
 
 const Navigation: React.FC = () => {
   const location = useLocation();
@@ -29,8 +30,16 @@ const Navigation: React.FC = () => {
         <Tab 
           label="Задачи" 
           value="/tasks" 
-          to="/tasks"
-          component={Link}
+          to={FEATURE_FLAGS.TASKS_ENABLED ? "/tasks" : "#"}
+          component={FEATURE_FLAGS.TASKS_ENABLED ? Link : "span"}
+          disabled={!FEATURE_FLAGS.TASKS_ENABLED}
+          sx={{
+            opacity: FEATURE_FLAGS.TASKS_ENABLED ? 1 : 0.5,
+            cursor: FEATURE_FLAGS.TASKS_ENABLED ? 'pointer' : 'not-allowed',
+            '&.Mui-disabled': {
+              color: 'text.disabled',
+            }
+          }}
         />
       </Tabs>
     </Box>

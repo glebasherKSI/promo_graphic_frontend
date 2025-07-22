@@ -152,11 +152,12 @@ const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
 
           {/* Тип информирования */}
           <FormControl fullWidth>
-            <InputLabel>Тип информирования</InputLabel>
+            <InputLabel>Тип информирования *</InputLabel>
             <Select
               value={formData.type || ''}
               onChange={(e) => handleChange('type', e.target.value)}
-              label="Тип информирования"
+              label="Тип информирования *"
+              required
             >
               {CHANNEL_TYPES.map(type => (
                 <MenuItem key={type} value={type}>{type}</MenuItem>
@@ -166,11 +167,12 @@ const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
 
           {/* Проект */}
           <FormControl fullWidth>
-            <InputLabel>Проект</InputLabel>
+            <InputLabel>Проект *</InputLabel>
             <Select
               value={formData.project || ''}
               onChange={(e) => handleChange('project', e.target.value)}
-              label="Проект"
+              label="Проект *"
+              required
             >
               {projects.map(project => (
                 <MenuItem key={project} value={project}>{project}</MenuItem>

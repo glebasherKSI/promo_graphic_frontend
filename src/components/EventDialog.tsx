@@ -255,23 +255,24 @@ const EventDialog: React.FC<EventDialogProps> = ({
           </FormControl>
 
           {/* Вид промо */}
-          <FormControl fullWidth>
-            <InputLabel>Вид промо *</InputLabel>
-            <Select
-              value={formData.promo_kind || ''}
-              onChange={(e) => handleChange('promo_kind', e.target.value)}
-              required
-            >
-              {getAvailableKinds(formData.promo_type || '').map(kind => (
-                <MenuItem key={kind} value={kind}>{kind}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          {formData.promo_type && getAvailableKinds(formData.promo_type).length > 0 && (
+            <FormControl fullWidth>
+              <InputLabel>Вид промо</InputLabel>
+              <Select
+                value={formData.promo_kind || ''}
+                onChange={(e) => handleChange('promo_kind', e.target.value)}
+              >
+                {getAvailableKinds(formData.promo_type).map(kind => (
+                  <MenuItem key={kind} value={kind}>{kind}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
 
           {/* Название */}
           <TextField
             fullWidth
-            label="Название *"
+            label="Название "
             value={formData.name || ''}
             onChange={(e) => handleChange('name', e.target.value)}
             required
@@ -299,7 +300,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
           {/* Даты */}
           <Box sx={{ display: 'flex', gap: 2 }}>
             <DateTimePicker
-              label="Дата начала *"
+              label="Дата начала "
               value={formData.start_date ? dayjs(formData.start_date) : null}
               onChange={(value) => handleChange('start_date', value ? value.format('YYYY-MM-DDTHH:mm:ss') : null)}
               slotProps={{
@@ -310,7 +311,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
               }}
             />
             <DateTimePicker
-              label="Дата окончания *"
+              label="Дата окончания "
               value={formData.end_date ? dayjs(formData.end_date) : null}
               onChange={(value) => handleChange('end_date', value ? value.format('YYYY-MM-DDTHH:mm:ss') : null)}
               slotProps={{

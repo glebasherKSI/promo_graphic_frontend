@@ -32,14 +32,167 @@ const darkTheme = createTheme({
   palette: {
     mode: 'dark',
     background: {
-      default: '#24243e',
-      paper: '#333a56',
+      default: '#161E2F', // основной фон
+      paper: '#242F49', // фон карточек/контейнеров
     },
     primary: {
-      main: '#5A7684',
+      main: '#384358', // header/nav/выделения
+      contrastText: '#fff',
+    },
+    secondary: {
+      main: '#FFA586', // акцент/кнопки
+      contrastText: '#161E2F',
+    },
+    error: {
+      main: '#B51A2B', // красный акцент
+      contrastText: '#fff',
+    },
+    warning: {
+      main: '#FFA586',
+      contrastText: '#161E2F',
+    },
+    info: {
+      main: '#384358',
+      contrastText: '#fff',
+    },
+    success: {
+      main: '#161E2F',
+      contrastText: '#fff',
     },
     text: {
-      primary: '#eff0f1',
+      primary: '#fff',
+      secondary: '#FFA586',
+      disabled: '#bdbdbd',
+    },
+    divider: '#FFA586',
+  },
+  typography: {
+    fontFamily: 'Raleway, Arial, sans-serif',
+    h1: { fontFamily: 'Raleway Semibold, Raleway, Arial, sans-serif' },
+    h2: { fontFamily: 'Raleway Semibold, Raleway, Arial, sans-serif' },
+    h3: { fontFamily: 'Raleway Semibold, Raleway, Arial, sans-serif' },
+    h4: { fontFamily: 'Raleway Semibold, Raleway, Arial, sans-serif' },
+    h5: { fontFamily: 'Raleway Semibold, Raleway, Arial, sans-serif' },
+    h6: { fontFamily: 'Raleway Semibold, Raleway, Arial, sans-serif' },
+    button: { fontFamily: 'Raleway Semibold, Raleway, Arial, sans-serif' },
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          textTransform: 'none',
+          fontWeight: 600,
+          fontFamily: 'Raleway Semibold, Raleway, Arial, sans-serif',
+        },
+        containedPrimary: {
+          backgroundColor: '#384358',
+          color: '#fff',
+          '&:hover': { backgroundColor: '#242F49' },
+        },
+        containedSecondary: {
+          backgroundColor: '#FFA586',
+          color: '#161E2F',
+          '&:hover': { backgroundColor: '#B51A2B' },
+        },
+        outlinedError: {
+          backgroundColor: '#B51A2B',
+          color: '#fff',
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundColor: '#242F49',
+          borderRadius: 16,
+        },
+      },
+    },
+    MuiAppBar: {
+      styleOverrides: {
+        root: {
+          background: '#384358',
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          background: '#FFA586',
+          color: '#161E2F',
+        },
+      },
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          color: '#FFA586',
+        },
+      },
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          background: '#161E2F',
+          color: '#fff',
+          borderRadius: 8,
+        },
+        notchedOutline: {
+          borderColor: '#FFA586',
+        },
+      },
+    },
+    MuiSelect: {
+      styleOverrides: {
+        icon: {
+          color: '#FFA586',
+        },
+      },
+    },
+    MuiMenu: {
+      styleOverrides: {
+        paper: {
+          background: '#242F49',
+          color: '#fff',
+        },
+      },
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          background: '#242F49',
+          color: '#fff',
+        },
+      },
+    },
+    MuiTypography: {
+      styleOverrides: {
+        root: {
+          color: '#fff',
+        },
+      },
+    },
+    MuiFormLabel: {
+      styleOverrides: {
+        root: {
+          color: '#FFA586',
+        },
+      },
+    },
+    MuiCheckbox: {
+      styleOverrides: {
+        root: {
+          color: '#B51A2B',
+        },
+      },
+    },
+    MuiCircularProgress: {
+      styleOverrides: {
+        root: {
+          color: '#FFA586',
+        },
+      },
     },
   },
 });
@@ -321,7 +474,7 @@ function App() {
             {/* Информация о пользователе */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h4" component="h1">
-            Промо-календарь
+            График промо
           </Typography>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Chip

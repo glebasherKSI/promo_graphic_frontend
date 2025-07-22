@@ -15,13 +15,16 @@ import {
   ListItemText,
   Divider,
   CircularProgress,
-  SelectChangeEvent
+  SelectChangeEvent,
+  IconButton
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers';
 import dayjs from '../utils/dayjs';
 import CalendarGrid from '../components/CalendarGrid';
 import ColorLegend from '../components/ColorLegend';
 import { PromoEvent, InfoChannel, AuthState } from '../types';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 
 interface CalendarProps {
   events: PromoEvent[];
@@ -75,28 +78,30 @@ const Calendar: React.FC<CalendarProps> = ({
     
     if (
       (event.promo_type === 'Турниры' && event.promo_kind === 'Регулярные') ||
+      (event.promo_type === 'Лотереи' && event.promo_kind === 'Регулярные') ||
       event.promo_type === 'Кэшбек'
     ) {
       return true;
     }
-    const eventStartDate = dayjs(event.start_date);
-    const eventEndDate = dayjs(event.end_date);
-    const startOfMonth = dayjs().year(selectedYear).month(selectedMonth - 1).startOf('month');
+    
+
+    const eventStartDate = dayjs(event.start_date).utc();
+    const eventEndDate = dayjs(event.end_date).utc();
+    const startOfMonth = dayjs.utc().year(selectedYear).month(selectedMonth - 1).startOf('month');
     const endOfMonth = startOfMonth.endOf('month');
 
-    // Проверяем попадает ли само событие в месяц
+    // Проверяем попадает ли само событие в месяц (простая логика пересечения интервалов)
     const eventInMonth = (
       selectedProjects.includes(event.project) &&
-      ((eventStartDate.isSameOrBefore(endOfMonth) && eventEndDate.isSameOrAfter(startOfMonth)) ||
-        (eventStartDate.isSameOrBefore(endOfMonth) && eventStartDate.isSameOrAfter(startOfMonth)) ||
-        (eventEndDate.isSameOrBefore(endOfMonth) && eventEndDate.isSameOrAfter(startOfMonth)))
+      eventStartDate.isSameOrBefore(endOfMonth, 'day') && 
+      eventEndDate.isSameOrAfter(startOfMonth, 'day')
     );
 
     // Проверяем есть ли каналы информирования в текущем месяце
     const hasChannelsInMonth = selectedProjects.includes(event.project) &&
       event.info_channels && 
       event.info_channels.some(channel => {
-        const channelDate = dayjs(channel.start_date);
+        const channelDate = dayjs(channel.start_date).utc();
         return channelDate.isBetween(startOfMonth, endOfMonth, 'day', '[]');
       });
 
@@ -129,14 +134,44 @@ const Calendar: React.FC<CalendarProps> = ({
       {/* Фильтры */}
       <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-          <FormControl sx={{ minWidth: 200 }}>
-            <DatePicker
-              views={['month', 'year']}
-              label="Месяц"
-              value={dayjs().year(selectedYear).month(selectedMonth - 1)}
-              onChange={handleMonthChange}
-            />
-          </FormControl>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <IconButton
+              onClick={() => {
+                if (selectedMonth === 1) {
+                  setSelectedMonth(12);
+                  setSelectedYear(selectedYear - 1);
+                } else {
+                  setSelectedMonth(selectedMonth - 1);
+                }
+              }}
+              size="small"
+              sx={{ mr: 1 }}
+            >
+              <ChevronLeftIcon />
+            </IconButton>
+            <FormControl sx={{ minWidth: 200 }}>
+              <DatePicker
+                views={['month', 'year']}
+                label="Месяц"
+                value={dayjs().year(selectedYear).month(selectedMonth - 1)}
+                onChange={handleMonthChange}
+              />
+            </FormControl>
+            <IconButton
+              onClick={() => {
+                if (selectedMonth === 12) {
+                  setSelectedMonth(1);
+                  setSelectedYear(selectedYear + 1);
+                } else {
+                  setSelectedMonth(selectedMonth + 1);
+                }
+              }}
+              size="small"
+              sx={{ ml: 1 }}
+            >
+              <ChevronRightIcon />
+            </IconButton>
+          </Box>
 
           <FormControl sx={{ minWidth: 200 }}>
             <InputLabel>Проекты</InputLabel>
