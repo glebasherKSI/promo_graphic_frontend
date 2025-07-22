@@ -91,14 +91,14 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
       // Определяем количество необходимых строк для этого типа (та же логика)
       const rows: PromoEvent[][] = [];
       typeEvents.forEach(event => {
-        const eventStart = dayjs(event.start_date).utc();
-        const eventEnd = dayjs(event.end_date).utc();
+        const eventStart = dayjs.utc(event.start_date);
+        const eventEnd = dayjs.utc(event.end_date);
 
         let foundRow = false;
         for (let i = 0; i < rows.length; i++) {
           const hasIntersection = rows[i].some(existingEvent => {
-            const existingStart = dayjs(existingEvent.start_date).utc();
-            const existingEnd = dayjs(existingEvent.end_date).utc();
+            const existingStart = dayjs.utc(existingEvent.start_date);
+            const existingEnd = dayjs.utc(existingEvent.end_date);
             return (
               (eventStart.isBefore(existingEnd) || eventStart.isSame(existingEnd)) &&
               (eventEnd.isAfter(existingStart) || eventEnd.isSame(existingStart))
@@ -131,8 +131,8 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
 
   // Функция для рендера одной полосы события
   const renderEventBar = (event: PromoEvent, rowIndex: number) => {
-    const eventStart = dayjs(event.start_date).utc();
-    const eventEnd = dayjs(event.end_date).utc();
+    const eventStart = dayjs.utc(event.start_date);
+    const eventEnd = dayjs.utc(event.end_date);
     
     // Начало и конец текущего месяца в UTC
     const monthStart = dayjs.utc().year(selectedYear).month(selectedMonth - 1).startOf('month');

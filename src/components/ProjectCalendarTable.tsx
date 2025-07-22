@@ -171,14 +171,14 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
           // Определяем количество необходимых строк для этого типа
           const rows: PromoEvent[][] = [];
           typeEvents.forEach(event => {
-            const eventStart = dayjs(event.start_date);
-            const eventEnd = dayjs(event.end_date);
+            const eventStart = dayjs.utc(event.start_date);
+            const eventEnd = dayjs.utc(event.end_date);
 
             let foundRow = false;
             for (let i = 0; i < rows.length; i++) {
               const hasIntersection = rows[i].some(existingEvent => {
-                const existingStart = dayjs(existingEvent.start_date);
-                const existingEnd = dayjs(existingEvent.end_date);
+                const existingStart = dayjs.utc(existingEvent.start_date);
+                const existingEnd = dayjs.utc(existingEvent.end_date);
                 return (
                   (eventStart.isBefore(existingEnd) || eventStart.isSame(existingEnd)) &&
                   (eventEnd.isAfter(existingStart) || eventEnd.isSame(existingStart))
@@ -247,9 +247,9 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
                 // Находим все события для текущего дня
                 const dayEvents = events.filter(event => {
                   if (event.project !== project || event.promo_type !== promoType) return false;
-                  const startDate = dayjs(event.start_date).utc();
-                  const endDate = dayjs(event.end_date).utc();
-                  const currentDate = date.utc ? date.utc() : dayjs(date).utc();
+                  const startDate = dayjs.utc(event.start_date);
+                  const endDate = dayjs.utc(event.end_date);
+                  const currentDate = date.utc ? date.utc() : dayjs.utc(date);
                   if (event.promo_type === 'Кешбэк' && startDate.isSame(endDate, 'day')) {
                     // Только в ячейке даты начала
                     return currentDate.isSame(startDate, 'day');
@@ -340,7 +340,7 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
                 )
                 .filter(channel => {
                   if (!channel || channel.type !== channelType) return false;
-                  const channelDate = dayjs(channel.start_date);
+                  const channelDate = dayjs.utc(channel.start_date);
                   return channelDate.isSame(date, 'day');
                 });
 

@@ -108,6 +108,28 @@ const EventDialog: React.FC<EventDialogProps> = ({
     }
   }, [event]);
 
+  // Автоматическое обновление дат каналов при изменении даты начала
+  useEffect(() => {
+    if (formData.start_date && selectedChannelTypes.length > 0) {
+      console.log('Обновляем даты каналов для новой даты начала:', formData.start_date);
+      
+      setChannelData(prev => {
+        const updated = { ...prev };
+        selectedChannelTypes.forEach(channelType => {
+          if (updated[channelType]) {
+            const newDate = getChannelStartDate(channelType, formData.start_date);
+            updated[channelType] = {
+              ...updated[channelType],
+              start_date: newDate
+            };
+            console.log(`Обновлен канал ${channelType} с новой датой:`, newDate);
+          }
+        });
+        return updated;
+      });
+    }
+  }, [formData.start_date, selectedChannelTypes]);
+
   const handleChange = (field: keyof PromoEventFormData, value: any) => {
     setFormData(prev => {
       const newData = { ...prev, [field]: value };
@@ -133,7 +155,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
           channelsArray.push({
             type: channel.type as ChannelType,
             project: formData.project,
-            start_date: channel.start_date || formData.start_date || dayjs().format('YYYY-MM-DDTHH:mm:ss'),
+            start_date: channel.start_date || formData.start_date || dayjs.utc().format('YYYY-MM-DDTHH:mm:ss'),
             name: channel.name || formData.name,
             segments: channel.segments || formData.segments || 'СНГ',
             comment: channel.comment || '',
@@ -150,8 +172,8 @@ const EventDialog: React.FC<EventDialogProps> = ({
         name: formData.name,
         comment: formData.comment || '',
         segments: formData.segments || 'СНГ',
-        start_date: formData.start_date || dayjs().format('YYYY-MM-DDTHH:mm:ss'),
-        end_date: formData.end_date || dayjs().add(1, 'day').format('YYYY-MM-DDTHH:mm:ss'),
+        start_date: formData.start_date || dayjs.utc().format('YYYY-MM-DDTHH:mm:ss'),
+        end_date: formData.end_date || dayjs.utc().add(1, 'day').format('YYYY-MM-DDTHH:mm:ss'),
         link: formData.link || '',
         info_channels: channelsArray
       };
@@ -170,6 +192,33 @@ const EventDialog: React.FC<EventDialogProps> = ({
     return PROMO_KINDS[type] || [];
   };
 
+  // Функция для автоматического расчета даты старта канала
+  const getChannelStartDate = (channelType: string, eventStartDate: string | null): string => {
+    if (!eventStartDate) return '';
+    
+    const baseDate = dayjs.utc(eventStartDate).startOf('day');
+    
+    const channelRules: { [key: string]: { offset: number; hour: number } } = {
+      'E-mail': { offset: 0, hour: 9 },
+      'MSGR': { offset: 1, hour: 17 },
+      'BPS': { offset: 1, hour: 17 },
+      'PUSH': { offset: 2, hour: 19 },
+      'SMM': { offset: 0, hour: 12 },
+      'Страница': { offset: -1, hour: 10 },
+      'Баннер': { offset: 0, hour: 10 }
+    };
+
+    const rule = channelRules[channelType];
+    if (!rule) return eventStartDate;
+
+    return baseDate
+      .add(rule.offset, 'day')
+      .hour(rule.hour)
+      .minute(0)
+      .second(0)
+      .format('YYYY-MM-DDTHH:mm:ss');
+  };
+
   const handleChannelTypesChange = (event: any) => {
     const newTypes = event.target.value as string[];
     setSelectedChannelTypes(newTypes);
@@ -178,13 +227,15 @@ const EventDialog: React.FC<EventDialogProps> = ({
     const newChannelData = { ...channelData };
     newTypes.forEach(type => {
       if (!newChannelData[type]) {
+        const calculatedDate = getChannelStartDate(type, formData.start_date);
         newChannelData[type] = {
           type,
-          start_date: '',
-          name: '',
-          segments: 'СНГ',
+          start_date: calculatedDate || '',
+          name: formData.name || '',
+          segments: formData.segments || 'СНГ',
           project: formData.project || ''
         };
+        console.log(`Создан канал ${type} с автоматической датой:`, calculatedDate);
       }
     });
     

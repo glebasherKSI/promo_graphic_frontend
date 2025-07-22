@@ -404,12 +404,12 @@ function App() {
       if (editingChannel) {
         response = await axios.put(`/api/channels/${editingChannel.id}`, {
           ...channelData,
-          start_date: channelData.start_date || dayjs().format('YYYY-MM-DDTHH:mm:ss')
+          start_date: channelData.start_date || dayjs.utc().format('YYYY-MM-DDTHH:mm:ss')
         });
       } else {
         response = await axios.post('/api/channels', {
           ...channelData,
-          start_date: channelData.start_date || dayjs().format('YYYY-MM-DDTHH:mm:ss')
+          start_date: channelData.start_date || dayjs.utc().format('YYYY-MM-DDTHH:mm:ss')
         });
       }
       

@@ -78,30 +78,28 @@ const Calendar: React.FC<CalendarProps> = ({
     
     if (
       (event.promo_type === 'Турниры' && event.promo_kind === 'Регулярные') ||
-      (event.promo_type === 'Лотереи' && event.promo_kind === 'Регулярные') ||
       event.promo_type === 'Кэшбек'
     ) {
       return true;
     }
-    
-
-    const eventStartDate = dayjs(event.start_date).utc();
-    const eventEndDate = dayjs(event.end_date).utc();
-    const startOfMonth = dayjs.utc().year(selectedYear).month(selectedMonth - 1).startOf('month');
+    const eventStartDate = dayjs(event.start_date);
+    const eventEndDate = dayjs(event.end_date);
+    const startOfMonth = dayjs().year(selectedYear).month(selectedMonth - 1).startOf('month');
     const endOfMonth = startOfMonth.endOf('month');
 
-    // Проверяем попадает ли само событие в месяц (простая логика пересечения интервалов)
+    // Проверяем попадает ли само событие в месяц
     const eventInMonth = (
       selectedProjects.includes(event.project) &&
-      eventStartDate.isSameOrBefore(endOfMonth, 'day') && 
-      eventEndDate.isSameOrAfter(startOfMonth, 'day')
+      ((eventStartDate.isSameOrBefore(endOfMonth) && eventEndDate.isSameOrAfter(startOfMonth)) ||
+        (eventStartDate.isSameOrBefore(endOfMonth) && eventStartDate.isSameOrAfter(startOfMonth)) ||
+        (eventEndDate.isSameOrBefore(endOfMonth) && eventEndDate.isSameOrAfter(startOfMonth)))
     );
 
     // Проверяем есть ли каналы информирования в текущем месяце
     const hasChannelsInMonth = selectedProjects.includes(event.project) &&
       event.info_channels && 
       event.info_channels.some(channel => {
-        const channelDate = dayjs(channel.start_date).utc();
+        const channelDate = dayjs(channel.start_date);
         return channelDate.isBetween(startOfMonth, endOfMonth, 'day', '[]');
       });
 

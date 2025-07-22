@@ -241,7 +241,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                 Дата старта
               </Typography>
               <Typography variant="body2">
-                {dayjs(channel.start_date).utc().format('DD.MM.YYYY HH:mm')}
+                {dayjs.utc(channel.start_date).format('DD.MM.YYYY HH:mm')}
               </Typography>
             </Box>
 
@@ -328,7 +328,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                 Даты проведения
               </Typography>
               <Typography variant="body2">
-                {`${dayjs(promoEvent.start_date).utc().format('DD.MM.YYYY HH:mm')} - ${dayjs(promoEvent.end_date).utc().format('DD.MM.YYYY HH:mm')}`}
+                {`${dayjs.utc(promoEvent.start_date).format('DD.MM.YYYY HH:mm')} - ${dayjs.utc(promoEvent.end_date).format('DD.MM.YYYY HH:mm')}`}
               </Typography>
             </Box>
 
@@ -422,14 +422,14 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     const startDay = days[0];
     const endDay = days[days.length - 1];
 
-    const startDate = dayjs()
+    const startDate = dayjs.utc()
       .year(selectedYear)
       .month(selectedMonth - 1)
       .date(startDay)
       .startOf('day')
       .format('YYYY-MM-DDTHH:mm:ss');
 
-    const endDate = dayjs()
+    const endDate = dayjs.utc()
       .year(selectedYear)
       .month(selectedMonth - 1)
       .date(endDay)
@@ -733,55 +733,104 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
 
   // Функция для генерации рекуррентных турниров
   function generateRecurringEvents(event: PromoEvent) {
-    if (event.promo_type === 'Кэшбек') {
-      // Кэшбек: каждую неделю в тот же день недели и время, на год вперёд
+    // Проверяем валидность дат
+    if (!event.start_date || !event.end_date) {
+      console.warn('Событие с невалидными датами:', event);
+      return [event];
+    }
+
+    try {
+      if (event.promo_type === 'Кэшбек') {
+        // Кэшбек: каждую неделю в тот же день недели и время, на год вперёд
+        const result: PromoEvent[] = [];
+        let currentStart = dayjs.utc(event.start_date);
+        let currentEnd = dayjs.utc(event.end_date);
+        
+        // Проверяем валидность парсинга дат
+        if (!currentStart.isValid() || !currentEnd.isValid()) {
+          console.warn('Невалидные даты для кэшбека:', event);
+          return [event];
+        }
+        
+        const yearEnd = currentStart.add(1, 'year');
+        let iterationCount = 0;
+        const maxIterations = 60; // Ограничиваем количество итераций
+        
+        while (currentStart.isBefore(yearEnd) && iterationCount < maxIterations) {
+          result.push({
+            ...event,
+            start_date: currentStart.toISOString(),
+            end_date: currentEnd.toISOString()
+          });
+          currentStart = currentStart.add(1, 'week');
+          currentEnd = currentEnd.add(1, 'week');
+          iterationCount++;
+        }
+        return result;
+      }
+      
+      // Турниры и Лотереи: регулярные — логика одинаковая (подряд без перерывов)
+      const start = dayjs.utc(event.start_date);
+      const end = dayjs.utc(event.end_date);
+      
+      // Проверяем валидность парсинга дат
+      if (!start.isValid() || !end.isValid()) {
+        console.warn('Невалидные даты для турнира/лотереи:', event);
+        return [event];
+      }
+      
+      // Вычисляем точную длительность в миллисекундах
+      const durationMs = end.diff(start, 'millisecond');
+      
+      // Проверяем разумность длительности
+      if (durationMs <= 0 || durationMs > 365 * 24 * 60 * 60 * 1000) {
+        console.warn('Неразумная длительность события:', durationMs, event);
+        return [event];
+      }
+      
+      let currentStart = start;
+      const yearEnd = start.add(1, 'year');
       const result: PromoEvent[] = [];
-      let currentStart = dayjs(event.start_date);
-      let currentEnd = dayjs(event.end_date);
-      const yearEnd = dayjs(event.start_date).add(1, 'year');
-      while (currentStart.isBefore(yearEnd)) {
+      let iterationCount = 0;
+      const maxIterations = 100; // Ограничиваем количество итераций
+      
+      while (currentStart.isBefore(yearEnd) && iterationCount < maxIterations) {
+        // Рассчитываем конец события, добавляя точную длительность в миллисекундах
+        const currentEnd = currentStart.add(durationMs, 'millisecond');
+        
+        // Проверяем валидность получившихся дат
+        if (!currentStart.isValid() || !currentEnd.isValid()) {
+          console.warn('Невалидные даты при генерации рекуррентного события:', currentStart, currentEnd);
+          break;
+        }
+        
         result.push({
           ...event,
           start_date: currentStart.toISOString(),
           end_date: currentEnd.toISOString()
         });
-        currentStart = currentStart.add(1, 'week');
-        currentEnd = currentEnd.add(1, 'week');
+        
+        // Следующий турнир начинается сразу после окончания предыдущего (подряд без перерывов)
+        currentStart = currentEnd;
+        iterationCount++;
       }
-      return result;
+      
+      return result.length > 0 ? result : [event];
+    } catch (error) {
+      console.error('Ошибка при генерации рекуррентных событий:', error, event);
+      return [event];
     }
-    // Турниры и Лотереи: регулярные — логика одинаковая (подряд без перерывов)
-    const start = dayjs(event.start_date);
-    const end = dayjs(event.end_date);
-    const duration = end.diff(start, 'millisecond');
-    let currentStart = start;
-    const yearEnd = start.add(1, 'year');
-    const endTime = {
-      hour: end.hour(),
-      minute: end.minute(),
-      second: end.second(),
-      millisecond: end.millisecond(),
-    };
-    const result: PromoEvent[] = [];
-    while (currentStart.isBefore(yearEnd)) {
-      let currentEnd = currentStart.add(duration, 'millisecond')
-        .set('hour', endTime.hour)
-        .set('minute', endTime.minute)
-        .set('second', endTime.second)
-        .set('millisecond', endTime.millisecond);
-      result.push({
-        ...event,
-        start_date: currentStart.toISOString(),
-        end_date: currentEnd.toISOString()
-      });
-      currentStart = currentEnd;
-    }
-    return result;
   }
 
   const processedEvents = useMemo(() => {
     let allEvents: PromoEvent[] = [];
     for (const event of events) {
+      // Проверяем валидность события перед обработкой
+      if (!event || !event.start_date || !event.end_date) {
+        console.warn('Пропускаем событие с невалидными данными:', event);
+        continue;
+      }
+      
       if (
         (event.promo_type === 'Турниры' && event.promo_kind === 'Регулярные') ||
         (event.promo_type === 'Лотереи' && event.promo_kind === 'Регулярные') ||
@@ -793,13 +842,25 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       }
     }
     // Фильтруем только события, которые попадают в выбранный месяц
-    const monthStart = dayjs().year(selectedYear).month(selectedMonth - 1).startOf('month');
+    const monthStart = dayjs.utc().year(selectedYear).month(selectedMonth - 1).startOf('month');
     const monthEnd = monthStart.endOf('month');
     return allEvents.filter(ev => {
-      const evStart = dayjs(ev.start_date);
-      const evEnd = dayjs(ev.end_date);
-      // Событие попадает в месяц, если оно хотя бы частично пересекается с выбранным месяцем
-      return evEnd.isSameOrAfter(monthStart) && evStart.isSameOrBefore(monthEnd);
+      try {
+        const evStart = dayjs.utc(ev.start_date);
+        const evEnd = dayjs.utc(ev.end_date);
+        
+        // Проверяем валидность дат
+        if (!evStart.isValid() || !evEnd.isValid()) {
+          console.warn('Пропускаем событие с невалидными датами при фильтрации:', ev);
+          return false;
+        }
+        
+        // Событие попадает в месяц, если оно хотя бы частично пересекается с выбранным месяцем
+        return evEnd.isSameOrAfter(monthStart) && evStart.isSameOrBefore(monthEnd);
+      } catch (error) {
+        console.warn('Ошибка при фильтрации события:', error, ev);
+        return false;
+      }
     });
   }, [events, selectedMonth, selectedYear]);
 

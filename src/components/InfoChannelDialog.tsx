@@ -119,7 +119,7 @@ const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
         segments: formData.segments || 'СНГ',
         comment: formData.comment || '',
         link: formData.link || '',
-        start_date: formData.start_date || dayjs().format('YYYY-MM-DDTHH:mm:ss')
+        start_date: formData.start_date || dayjs.utc().format('YYYY-MM-DDTHH:mm:ss')
       };
 
       await onSave(channelData);
@@ -194,7 +194,7 @@ const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
               </MenuItem>
               {filteredPromoEvents.map(event => (
                 <MenuItem key={event.id} value={event.id}>
-                  {event.name} ({event.promo_type} - {dayjs(event.start_date).format('DD.MM.YYYY')})
+                  {event.name} ({event.promo_type} - {dayjs.utc(event.start_date).format('DD.MM.YYYY')})
                 </MenuItem>
               ))}
             </Select>
