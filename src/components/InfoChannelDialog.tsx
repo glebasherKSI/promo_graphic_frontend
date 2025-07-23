@@ -60,7 +60,7 @@ const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
         segments: channel.segments,
         comment: channel.comment,
         link: channel.link,
-        promo_id: channel.promo_id
+        promo_id: channel.promo_id ? String(channel.promo_id) : ''
       });
     } else {
       setFormData({
@@ -80,7 +80,7 @@ const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
     setFormData(prev => {
       const updatedData = {
         ...prev,
-        [field]: value
+        [field]: field === 'promo_id' && value ? String(value) : value
       };
 
       // Если изменяется promo_id, автоматически заполняем название, комментарий и ссылку из промо события
@@ -119,9 +119,12 @@ const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
         segments: formData.segments || 'СНГ',
         comment: formData.comment || '',
         link: formData.link || '',
-        start_date: formData.start_date || dayjs.utc().format('YYYY-MM-DDTHH:mm:ss')
+        start_date: formData.start_date || dayjs.utc().format('YYYY-MM-DDTHH:mm:ss'),
+        // Оставляем promo_id как строку, если оно задано, иначе не включаем поле
+        ...(formData.promo_id && { promo_id: formData.promo_id })
       };
 
+      console.log('Отправляемые данные канала:', channelData);
       await onSave(channelData);
       onClose();
     } catch (err) {
@@ -203,8 +206,8 @@ const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
           {/* Дата */}
           <DateTimePicker
             label="Дата"
-            value={formData.start_date ? dayjs(formData.start_date) : null}
-            onChange={(value) => handleChange('start_date', value ? value.format('YYYY-MM-DDTHH:mm:ss') : null)}
+            value={formData.start_date ? dayjs.utc(formData.start_date) : null}
+            onChange={(value) => handleChange('start_date', value ? value.utc().format('YYYY-MM-DDTHH:mm:ss') : null)}
             slotProps={{
               textField: {
                 fullWidth: true,
