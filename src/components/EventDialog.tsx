@@ -453,7 +453,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>
+        <Button onClick={onClose} color="secondary" disabled={loading}>
           Отмена
         </Button>
         <Button 

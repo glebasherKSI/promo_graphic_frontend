@@ -212,6 +212,18 @@ const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
               textField: {
                 fullWidth: true,
                 error: false
+              },
+              actionBar: {
+                // Меняем цвет кнопки "OK" на желаемый (например, основной цвет темы)
+                sx: {
+                  '& .MuiButton-root': {
+                    color: 'secondary.contrastText',
+                    backgroundColor: 'secondary.main', // основной синий MUI, замените на нужный
+                    '&:hover': {
+                      backgroundColor: 'secondary.dark',
+                    },
+                  }
+                }
               }
             }}
           />
@@ -261,7 +273,7 @@ const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>
+        <Button onClick={onClose} color="secondary" disabled={loading}>
           Отмена
         </Button>
         <Button 

@@ -428,6 +428,18 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
                   textField: {
                     fullWidth: true,
                     required: true
+                  },
+                  actionBar: {
+                    // Меняем цвет кнопки "OK" на желаемый (например, основной цвет темы)
+                    sx: {
+                      '& .MuiButton-root': {
+                        color: 'secondary.contrastText',
+                        backgroundColor: 'secondary.main', // основной синий MUI, замените на нужный
+                        '&:hover': {
+                          backgroundColor: 'secondary.dark',
+                        },
+                      }
+                    }
                   }
                 }}
               />
@@ -440,6 +452,18 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
                   textField: {
                     fullWidth: true,
                     required: true
+                  },
+                  actionBar: {
+                    // Меняем цвет кнопки "OK" на желаемый (например, основной цвет темы)
+                    sx: {
+                      '& .MuiButton-root': {
+                        color: 'secondary.contrastText',
+                        backgroundColor: 'secondary.main', // основной синий MUI, замените на нужный
+                        '&:hover': {
+                          backgroundColor: 'secondary.dark',
+                        },
+                      }
+                    }
                   }
                 }}
               />
@@ -459,13 +483,6 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
               <Typography variant="h6">
                 Информирование
               </Typography>
-              <Button
-                startIcon={<AddIcon />}
-                onClick={handleAddChannel}
-                disabled={!formData.project || !formData.start_date}
-              >
-                Добавить канал
-              </Button>
             </Box>
 
 
@@ -607,7 +624,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
               Удалить
             </Button>
           )}
-          <Button onClick={onClose} disabled={loading}>
+          <Button onClick={onClose} color="secondary" disabled={loading}>
             Отмена
           </Button>
           <Box sx={{ position: 'relative', minWidth: 100 }}>

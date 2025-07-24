@@ -831,12 +831,29 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
         continue;
       }
       
+      // Генерируем рекуррентные события только для основных промо-событий
+      // Каналы информирования (info_channels) обрабатываются отдельно и не должны дублироваться
       if (
         (event.promo_type === 'Турниры' && event.promo_kind === 'Регулярные') ||
         (event.promo_type === 'Лотереи' && event.promo_kind === 'Регулярные') ||
         event.promo_type === 'Кэшбек'
       ) {
-        allEvents = allEvents.concat(generateRecurringEvents(event));
+        // Генерируем рекуррентные события
+        const recurringEvents = generateRecurringEvents(event);
+        
+        // Для каждого рекуррентного события сохраняем каналы только у оригинального события
+        recurringEvents.forEach((recurringEvent, index) => {
+          if (index === 0) {
+            // Первое событие (оригинальное) - сохраняем все каналы
+            allEvents.push(recurringEvent);
+          } else {
+            // Остальные рекуррентные события - убираем каналы информирования
+            allEvents.push({
+              ...recurringEvent,
+              info_channels: []
+            });
+          }
+        });
       } else {
         allEvents.push(event);
       }

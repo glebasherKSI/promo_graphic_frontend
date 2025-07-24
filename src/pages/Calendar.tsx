@@ -172,7 +172,14 @@ const Calendar: React.FC<CalendarProps> = ({
           </Box>
 
           <FormControl sx={{ minWidth: 200 }}>
-            <InputLabel>Проекты</InputLabel>
+            <InputLabel
+              sx={{
+                textDecoration: 'none',
+                color: 'secondary',
+              }}
+            >
+              Проекты
+            </InputLabel>
             <Select
               multiple
               value={selectedProjects}
@@ -180,24 +187,48 @@ const Calendar: React.FC<CalendarProps> = ({
               renderValue={(selected) => (
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                   {(selected as string[]).map((value) => (
-                    <Chip key={value} label={value} size="small" />
+                    <Chip
+                      key={value}
+                      label={value}
+                      size="small"
+                      sx={{
+                        backgroundColor: 'secondary.main',
+                        color: 'secondary.contrastText',
+                      }}
+                    />
                   ))}
                 </Box>
               )}
+              label="Проекты"
             >
               <ListSubheader>
                 <Box sx={{ display: 'flex', gap: 1, p: 1 }}>
-                  <Button size="small" onClick={(e) => { e.stopPropagation(); setSelectedProjects([]); }}>
+                  <Button
+                    size="small"
+                    color="secondary"
+                    onClick={(e) => { e.stopPropagation(); setSelectedProjects([]); }}
+                  >
                     Снять все
                   </Button>
-                  <Button size="small" onClick={(e) => { e.stopPropagation(); setSelectedProjects(PROJECTS); }}>
+                  <Button size="small" color="secondary" onClick={(e) => { e.stopPropagation(); setSelectedProjects(PROJECTS); }}>
                     Выделить все
                   </Button>
                 </Box>
               </ListSubheader>
               <Divider />
               {PROJECTS.map((project) => (
-                <MenuItem key={project} value={project}>
+                <MenuItem 
+                  key={project} 
+                  value={project}
+                  sx={{
+                    '&.Mui-selected': {
+                      backgroundColor: 'primary.light',
+                      '&:hover': {
+                        backgroundColor: 'primary.main',
+                      }
+                    }
+                  }}
+                >
                   {project}
                 </MenuItem>
               ))}

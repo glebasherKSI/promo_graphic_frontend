@@ -473,7 +473,7 @@ function App() {
           <Container maxWidth={false} sx={{ py: 1, px: 2 }}>
             {/* Информация о пользователе */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h4" component="h1">
+              <Typography variant="h4" component="h1" >
             График промо
           </Typography>
               <Stack direction="row" spacing={2} alignItems="center">

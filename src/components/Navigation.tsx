@@ -16,7 +16,7 @@ const Navigation: React.FC = () => {
           '& .MuiTab-root': {
             color: 'text.primary',
             '&.Mui-selected': {
-              color: 'primary.main',
+              color: 'secondary.main',
             },
           },
         }}
