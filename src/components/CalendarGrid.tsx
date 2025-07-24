@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   Paper,
   Table,
@@ -39,6 +39,7 @@ import {
 } from '../constants/promoTypes';
 import ProjectCalendarTable from './ProjectCalendarTable';
 import EventBarsLayer from './EventBarsLayer';
+import { memoizeWithKey, createEventKey } from '../utils/memoization';
 
 // Праздничные дни РФ (ежегодные)
 const HOLIDAYS = [
@@ -133,6 +134,110 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   
   // Создаем refs для каждого проекта
   const projectTableRefs = useRef<{[key: string]: React.RefObject<HTMLTableElement>}>({});
+  
+  // === НАСТОЯЩАЯ ВИРТУАЛИЗАЦИЯ НА ОСНОВЕ ВИДИМОСТИ ===
+  // Состояние для виртуализации
+  const [visibleProjects, setVisibleProjects] = useState<Set<string>>(new Set());
+  const [projectVisibility, setProjectVisibility] = useState<{[key: string]: boolean}>({});
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const projectElementRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Буфер проектов (рендерим видимые + по 1 до/после для плавности)
+  const bufferSize = 1;
+
+  // Функция для определения проектов к рендеру
+  const getProjectsToRender = useCallback(() => {
+    if (visibleProjects.size === 0) {
+      // Если ничего не видно, показываем первые 3 проекта
+      return new Set(selectedProjects.slice(0, Math.min(3, selectedProjects.length)));
+    }
+
+    const visibleIndices = Array.from(visibleProjects)
+      .map(project => selectedProjects.indexOf(project))
+      .filter(index => index !== -1)
+      .sort((a, b) => a - b);
+
+    if (visibleIndices.length === 0) {
+      return new Set(selectedProjects.slice(0, Math.min(3, selectedProjects.length)));
+    }
+
+    const minIndex = Math.max(0, visibleIndices[0] - bufferSize);
+    const maxIndex = Math.min(selectedProjects.length - 1, visibleIndices[visibleIndices.length - 1] + bufferSize);
+
+    const projectsToRender = new Set<string>();
+    for (let i = minIndex; i <= maxIndex; i++) {
+      projectsToRender.add(selectedProjects[i]);
+    }
+
+    return projectsToRender;
+  }, [visibleProjects, selectedProjects, bufferSize]);
+
+  const projectsToRender = getProjectsToRender();
+
+  // Функция для регистрации ref проекта
+  const registerProjectRef = useCallback((project: string, element: HTMLDivElement | null) => {
+    if (element) {
+      projectElementRefs.current.set(project, element);
+      // Добавляем к наблюдению
+      if (observerRef.current) {
+        observerRef.current.observe(element);
+      }
+    } else {
+      projectElementRefs.current.delete(project);
+    }
+  }, []);
+
+  // Инициализация Intersection Observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setProjectVisibility(prev => {
+          const updated = { ...prev };
+          entries.forEach(entry => {
+            const projectId = entry.target.getAttribute('data-project-id');
+            if (projectId) {
+              updated[projectId] = entry.isIntersecting;
+            }
+          });
+          return updated;
+        });
+
+        setVisibleProjects(prev => {
+          const newVisible = new Set(prev);
+          entries.forEach(entry => {
+            const projectId = entry.target.getAttribute('data-project-id');
+            if (projectId) {
+              if (entry.isIntersecting) {
+                newVisible.add(projectId);
+                console.log(`📊 Проект "${projectId}" стал видимым`);
+              } else {
+                newVisible.delete(projectId);
+                console.log(`📊 Проект "${projectId}" скрыт`);
+              }
+            }
+          });
+          
+          // Логирование статистики виртуализации
+          if (newVisible.size !== prev.size) {
+            console.log(`📊 Виртуализация: видимых ${newVisible.size}, всего ${selectedProjects.length}`);
+          }
+          
+          return newVisible;
+        });
+      },
+      {
+        root: null, // viewport
+        rootMargin: '200px', // Начинаем загрузку за 200px до появления
+        threshold: 0.1 // Считаем видимым при 10% видимости
+      }
+    );
+
+    observerRef.current = observer;
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [selectedProjects]);
   
   // Инициализируем refs для выбранных проектов
   selectedProjects.forEach(project => {
@@ -348,10 +453,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     }
   };
 
-  // Получаем первый день месяца
-  const firstDay = dayjs().year(selectedYear).month(selectedMonth - 1).startOf('month');
-  const daysInMonth = firstDay.daysInMonth();
-
   // Функция для проверки выходных и праздников
   const isWeekend = (date: dayjs.Dayjs) => {
     const dayOfWeek = date.day();
@@ -363,9 +464,13 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     return holiday ? holiday.days.includes(day) : false;
   };
 
-  // Функция для получения дней месяца с их датами
-  const getDaysArray = () => {
-    const days = [];
+  // Получаем первый день месяца
+  const firstDay = dayjs().year(selectedYear).month(selectedMonth - 1).startOf('month');
+  const daysInMonth = firstDay.daysInMonth();
+
+  // Мемоизированная функция для получения дней месяца с их датами
+  const days = useMemo(() => {
+    const result = [];
     for (let i = 0; i < daysInMonth; i++) {
       // Используем dayjs.utc() для создания дат в UTC
       const utcDate = dayjs.utc()
@@ -373,15 +478,15 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
         .month(selectedMonth - 1)
         .date(i + 1)
         .startOf('day');
-      days.push({
+      result.push({
         dayOfMonth: i + 1,
         date: utcDate,
         dayOfWeek: utcDate.format('dd').toUpperCase(),
         isWeekend: isWeekend(utcDate)
       });
     }
-    return days;
-  };
+    return result;
+  }, [selectedMonth, selectedYear, daysInMonth]);
 
   // Оптимизированный обработчик контекстного меню
   const handleContextMenu = useCallback((event: React.MouseEvent, promoEvent: PromoEvent | InfoChannel, isChannel = false) => {
@@ -509,9 +614,9 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     setConfirmDeleteOpen(false);
   }, []);
 
-  const days = getDaysArray();
+  // days уже определен выше как useMemo
 
-  // Функция для обновления выделения в DOM без ререндера
+  // Оптимизированная функция для обновления выделения в DOM без ререндера
   const updateCellSelection = useCallback((cellKey: string, selected: boolean) => {
     const cell = document.querySelector(`[data-cell-key="${cellKey}"]`);
     if (cell) {
@@ -524,6 +629,32 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       }
     }
   }, []);
+
+  // Централизованная функция обработки событий ячеек (Event Delegation)
+  const handleCellEvent = useCallback((event: React.MouseEvent, eventType: 'click' | 'rightClick' | 'mouseDown' | 'mouseEnter') => {
+    const target = event.target as HTMLElement;
+    const cell = target.closest('.calendar-cell-selectable') as HTMLElement;
+    
+    if (!cell) return;
+    
+    const cellKey = cell.getAttribute('data-cell-key');
+    if (!cellKey) return;
+
+    switch (eventType) {
+      case 'click':
+        handleCellClick(cellKey, event);
+        break;
+      case 'rightClick':
+        handleCellRightClick(cellKey, event);
+        break;
+      case 'mouseDown':
+        handleCellMouseDown(cellKey, event);
+        break;
+      case 'mouseEnter':
+        handleCellMouseEnter(cellKey, event);
+                 break;
+     }
+   }, []);
 
   // Обработчик клавиатуры для отмены выделения по Escape
   React.useEffect(() => {
@@ -731,96 +862,101 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     handleCloseCellMenu();
   }, [selectedCellsData, onChannelCreate, handleCloseCellMenu]);
 
-  // Функция для генерации рекуррентных турниров
-  function generateRecurringEvents(event: PromoEvent) {
-    // Проверяем валидность дат
-    if (!event.start_date || !event.end_date) {
-      console.warn('Событие с невалидными датами:', event);
-      return [event];
-    }
-
-    try {
-      if (event.promo_type === 'Кэшбек') {
-        // Кэшбек: каждую неделю в тот же день недели и время, на год вперёд
-        const result: PromoEvent[] = [];
-        let currentStart = dayjs.utc(event.start_date);
-        let currentEnd = dayjs.utc(event.end_date);
-        
-        // Проверяем валидность парсинга дат
-        if (!currentStart.isValid() || !currentEnd.isValid()) {
-          console.warn('Невалидные даты для кэшбека:', event);
+  // Мемоизированная функция для генерации рекуррентных событий
+  const generateRecurringEventsMemoized = useMemo(() => {
+    return memoizeWithKey(
+      (event: PromoEvent): PromoEvent[] => {
+        // Проверяем валидность дат
+        if (!event.start_date || !event.end_date) {
+          console.warn('Событие с невалидными датами:', event);
           return [event];
         }
-        
-        const yearEnd = currentStart.add(1, 'year');
-        let iterationCount = 0;
-        const maxIterations = 60; // Ограничиваем количество итераций
-        
-        while (currentStart.isBefore(yearEnd) && iterationCount < maxIterations) {
-          result.push({
-            ...event,
-            start_date: currentStart.toISOString(),
-            end_date: currentEnd.toISOString()
-          });
-          currentStart = currentStart.add(1, 'week');
-          currentEnd = currentEnd.add(1, 'week');
-          iterationCount++;
+
+        try {
+          if (event.promo_type === 'Кэшбек') {
+            // Кэшбек: каждую неделю в тот же день недели и время, на год вперёд
+            const result: PromoEvent[] = [];
+            let currentStart = dayjs.utc(event.start_date);
+            let currentEnd = dayjs.utc(event.end_date);
+            
+            // Проверяем валидность парсинга дат
+            if (!currentStart.isValid() || !currentEnd.isValid()) {
+              console.warn('Невалидные даты для кэшбека:', event);
+              return [event];
+            }
+            
+            const yearEnd = currentStart.add(1, 'year');
+            let iterationCount = 0;
+            const maxIterations = 60; // Ограничиваем количество итераций
+            
+            while (currentStart.isBefore(yearEnd) && iterationCount < maxIterations) {
+              result.push({
+                ...event,
+                start_date: currentStart.toISOString(),
+                end_date: currentEnd.toISOString()
+              });
+              currentStart = currentStart.add(1, 'week');
+              currentEnd = currentEnd.add(1, 'week');
+              iterationCount++;
+            }
+            return result;
+          }
+          
+          // Турниры и Лотереи: регулярные — логика одинаковая (подряд без перерывов)
+          const start = dayjs.utc(event.start_date);
+          const end = dayjs.utc(event.end_date);
+          
+          // Проверяем валидность парсинга дат
+          if (!start.isValid() || !end.isValid()) {
+            console.warn('Невалидные даты для турнира/лотереи:', event);
+            return [event];
+          }
+          
+          // Вычисляем точную длительность в миллисекундах
+          const durationMs = end.diff(start, 'millisecond');
+          
+          // Проверяем разумность длительности
+          if (durationMs <= 0 || durationMs > 365 * 24 * 60 * 60 * 1000) {
+            console.warn('Неразумная длительность события:', durationMs, event);
+            return [event];
+          }
+          
+          let currentStart = start;
+          const yearEnd = start.add(1, 'year');
+          const result: PromoEvent[] = [];
+          let iterationCount = 0;
+          const maxIterations = 100; // Ограничиваем количество итераций
+          
+          while (currentStart.isBefore(yearEnd) && iterationCount < maxIterations) {
+            // Рассчитываем конец события, добавляя точную длительность в миллисекундах
+            const currentEnd = currentStart.add(durationMs, 'millisecond');
+            
+            // Проверяем валидность получившихся дат
+            if (!currentStart.isValid() || !currentEnd.isValid()) {
+              console.warn('Невалидные даты при генерации рекуррентного события:', currentStart, currentEnd);
+              break;
+            }
+            
+            result.push({
+              ...event,
+              start_date: currentStart.toISOString(),
+              end_date: currentEnd.toISOString()
+            });
+            
+            // Следующий турнир начинается сразу после окончания предыдущего (подряд без перерывов)
+            currentStart = currentEnd;
+            iterationCount++;
+          }
+          
+          return result.length > 0 ? result : [event];
+        } catch (error) {
+          console.error('Ошибка при генерации рекуррентных событий:', error, event);
+          return [event];
         }
-        return result;
-      }
-      
-      // Турниры и Лотереи: регулярные — логика одинаковая (подряд без перерывов)
-      const start = dayjs.utc(event.start_date);
-      const end = dayjs.utc(event.end_date);
-      
-      // Проверяем валидность парсинга дат
-      if (!start.isValid() || !end.isValid()) {
-        console.warn('Невалидные даты для турнира/лотереи:', event);
-        return [event];
-      }
-      
-      // Вычисляем точную длительность в миллисекундах
-      const durationMs = end.diff(start, 'millisecond');
-      
-      // Проверяем разумность длительности
-      if (durationMs <= 0 || durationMs > 365 * 24 * 60 * 60 * 1000) {
-        console.warn('Неразумная длительность события:', durationMs, event);
-        return [event];
-      }
-      
-      let currentStart = start;
-      const yearEnd = start.add(1, 'year');
-      const result: PromoEvent[] = [];
-      let iterationCount = 0;
-      const maxIterations = 100; // Ограничиваем количество итераций
-      
-      while (currentStart.isBefore(yearEnd) && iterationCount < maxIterations) {
-        // Рассчитываем конец события, добавляя точную длительность в миллисекундах
-        const currentEnd = currentStart.add(durationMs, 'millisecond');
-        
-        // Проверяем валидность получившихся дат
-        if (!currentStart.isValid() || !currentEnd.isValid()) {
-          console.warn('Невалидные даты при генерации рекуррентного события:', currentStart, currentEnd);
-          break;
-        }
-        
-        result.push({
-          ...event,
-          start_date: currentStart.toISOString(),
-          end_date: currentEnd.toISOString()
-        });
-        
-        // Следующий турнир начинается сразу после окончания предыдущего (подряд без перерывов)
-        currentStart = currentEnd;
-        iterationCount++;
-      }
-      
-      return result.length > 0 ? result : [event];
-    } catch (error) {
-      console.error('Ошибка при генерации рекуррентных событий:', error, event);
-      return [event];
-    }
-  }
+      },
+      createEventKey // Используем стабильную функцию ключа
+    );
+  }, []); // Пустой массив зависимостей, так как функция не зависит от внешних переменных
 
   const processedEvents = useMemo(() => {
     let allEvents: PromoEvent[] = [];
@@ -839,10 +975,10 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
         event.promo_type === 'Кэшбек'
       ) {
         // Генерируем рекуррентные события
-        const recurringEvents = generateRecurringEvents(event);
+        const recurringEvents = generateRecurringEventsMemoized(event);
         
         // Для каждого рекуррентного события сохраняем каналы только у оригинального события
-        recurringEvents.forEach((recurringEvent, index) => {
+        recurringEvents.forEach((recurringEvent: PromoEvent, index: number) => {
           if (index === 0) {
             // Первое событие (оригинальное) - сохраняем все каналы
             allEvents.push(recurringEvent);
@@ -879,7 +1015,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
         return false;
       }
     });
-  }, [events, selectedMonth, selectedYear]);
+  }, [events, selectedMonth, selectedYear, generateRecurringEventsMemoized]);
 
   return (
     <>
@@ -912,57 +1048,90 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
             <CircularProgress />
           </Box>
         )}
-        {selectedProjects.map((project, projectIndex) => {
+        {selectedProjects.map((project: string, projectIndex: number) => {
           const currentTableRef = projectTableRefs.current[project];
+          const shouldRender = projectsToRender.has(project);
+          
           return (
-            <Box key={project} sx={{ position: 'relative' }}>
-              <ProjectCalendarTable
-                project={project}
-                projectIndex={projectIndex}
-                events={processedEvents}
-                days={days}
-                daysInMonth={daysInMonth}
-                PROMO_TYPES={PROMO_TYPES}
-                CHANNEL_TYPES={CHANNEL_TYPES}
-                getEventColor={getEventColor}
-                getChannelColor={getChannelColor}
-                isCellSelected={isCellSelected}
-                handleCellClick={handleCellClick}
-                handleCellRightClick={handleCellRightClick}
-                handleCellMouseDown={handleCellMouseDown}
-                handleCellMouseEnter={handleCellMouseEnter}
-                getCellKey={getCellKey}
-                handleContextMenu={handleContextMenu}
-                highlightedEventId={highlightedEventId}
-                setHighlightedEventId={setHighlightedEventId}
-                getEventTooltipContent={getEventTooltipContent}
-                pulseAnimation={pulseAnimation}
-                isAdmin={isAdmin}
-                tableRef={currentTableRef}
-                collapsedPromoTypes={collapsedPromoTypes}
-                togglePromoTypeCollapse={togglePromoTypeCollapse}
-              />
-              <EventBarsLayer
-                project={project}
-                events={processedEvents}
-                days={days}
-                selectedMonth={selectedMonth}
-                selectedYear={selectedYear}
-                PROMO_TYPES={PROMO_TYPES}
-                getEventColor={getEventColor}
-                handleContextMenu={handleContextMenu}
-                highlightedEventId={highlightedEventId}
-                setHighlightedEventId={setHighlightedEventId}
-                getEventTooltipContent={getEventTooltipContent}
-                pulseAnimation={pulseAnimation}
-                tableRef={currentTableRef}
-                projectIndex={projectIndex}
-                collapsedPromoTypes={collapsedPromoTypes}
-                forcePositionUpdate={forcePositionUpdate}
-              />
-            </Box>
+            <div
+              key={project}
+              data-project-id={project}
+              ref={(el: HTMLDivElement | null) => registerProjectRef(project, el)}
+              style={{ 
+                minHeight: shouldRender ? 'auto' : '400px', // Placeholder высота для невидимых
+                position: 'relative'
+              }}
+            >
+              {shouldRender ? (
+                <Box sx={{ position: 'relative' }}>
+                  <ProjectCalendarTable
+                    project={project}
+                    projectIndex={projectIndex}
+                    events={processedEvents}
+                    days={days}
+                    daysInMonth={daysInMonth}
+                    PROMO_TYPES={PROMO_TYPES}
+                    CHANNEL_TYPES={CHANNEL_TYPES}
+                    getEventColor={getEventColor}
+                    getChannelColor={getChannelColor}
+                    isCellSelected={isCellSelected}
+                    handleCellClick={handleCellClick}
+                    handleCellRightClick={handleCellRightClick}
+                    handleCellMouseDown={handleCellMouseDown}
+                    handleCellMouseEnter={handleCellMouseEnter}
+                    getCellKey={getCellKey}
+                    handleContextMenu={handleContextMenu}
+                    highlightedEventId={highlightedEventId}
+                    setHighlightedEventId={setHighlightedEventId}
+                    getEventTooltipContent={getEventTooltipContent}
+                    pulseAnimation={pulseAnimation}
+                    isAdmin={isAdmin}
+                    tableRef={currentTableRef}
+                    collapsedPromoTypes={collapsedPromoTypes}
+                    togglePromoTypeCollapse={togglePromoTypeCollapse}
+                  />
+                  <EventBarsLayer
+                    project={project}
+                    events={processedEvents}
+                    days={days}
+                    selectedMonth={selectedMonth}
+                    selectedYear={selectedYear}
+                    PROMO_TYPES={PROMO_TYPES}
+                    getEventColor={getEventColor}
+                    handleContextMenu={handleContextMenu}
+                    highlightedEventId={highlightedEventId}
+                    setHighlightedEventId={setHighlightedEventId}
+                    getEventTooltipContent={getEventTooltipContent}
+                    pulseAnimation={pulseAnimation}
+                    tableRef={currentTableRef}
+                    projectIndex={projectIndex}
+                    collapsedPromoTypes={collapsedPromoTypes}
+                    forcePositionUpdate={forcePositionUpdate}
+                  />
+                </Box>
+              ) : (
+                // Placeholder для невидимых проектов
+                <Box 
+                  sx={{ 
+                    height: '400px', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    backgroundColor: '#1a2332',
+                    borderRadius: 2,
+                    border: '1px solid #333a56',
+                    opacity: 0.5
+                  }}
+                >
+                  <Typography variant="h6" sx={{ color: '#666', opacity: 0.7 }}>
+                    {project} (виртуализирован)
+                  </Typography>
+                </Box>
+              )}
+            </div>
           );
         })}
+        
       </TableContainer>
 
       <Menu

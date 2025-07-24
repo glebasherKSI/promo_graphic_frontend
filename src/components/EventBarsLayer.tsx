@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Tooltip, Typography } from '@mui/material';
 import dayjs from '../utils/dayjs';
 import { PromoEvent, InfoChannel } from '../types';
+import { shallowCompareArrays, createEventKey } from '../utils/memoization';
 
 interface EventBarsLayerProps {
   project: string;
@@ -46,9 +47,68 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
   // Состояние для принудительного ререндера после изменения таблицы
   const [renderKey, setRenderKey] = React.useState(0);
   
+  // Кэш для DOM измерений
+  const domCache = React.useRef<Map<string, {
+    tableRect: DOMRect;
+    cellRects: Map<string, DOMRect>;
+    timestamp: number;
+  }>>(new Map());
+  
+  // Функция для получения кэшированных DOM измерений
+  const getCachedDOMData = React.useCallback((cacheKey: string) => {
+    const cached = domCache.current.get(cacheKey);
+    const now = Date.now();
+    
+    // Кэш действителен 200мс
+    if (cached && (now - cached.timestamp) < 200) {
+      return cached;
+    }
+    
+    // Если кэш устарел или отсутствует, вычисляем заново
+    if (!tableRef.current) return null;
+    
+    const tableRect = tableRef.current.getBoundingClientRect();
+    const cellRects = new Map<string, DOMRect>();
+    
+    // Кэшируем позиции всех ячеек для текущего проекта
+    PROMO_TYPES.forEach(promoType => {
+      for (let day = 1; day <= 31; day++) { // Максимальное количество дней
+        const cellSelector = `[data-cell-key="${project}-${promoType}-${day}"]`;
+        const cell = tableRef.current!.querySelector(cellSelector) as HTMLElement;
+        if (cell) {
+          cellRects.set(`${promoType}-${day}`, cell.getBoundingClientRect());
+        }
+      }
+    });
+    
+    const newData = {
+      tableRect,
+      cellRects,
+      timestamp: now
+    };
+    
+    domCache.current.set(cacheKey, newData);
+    
+    // Ограничиваем размер кэша
+    if (domCache.current.size > 10) {
+      const firstKey = domCache.current.keys().next().value;
+      if (firstKey) {
+        domCache.current.delete(firstKey);
+      }
+    }
+    
+    return newData;
+  }, [tableRef, project, PROMO_TYPES]);
+  
+  // Очищаем кэш при изменении ключевых параметров
+  React.useEffect(() => {
+    domCache.current.clear();
+  }, [events, selectedMonth, selectedYear, collapsedPromoTypes, forcePositionUpdate]);
+  
   // Пересчитываем позиции после рендера таблицы и изменения состояния сворачивания
   React.useEffect(() => {
     const timer = setTimeout(() => {
+      domCache.current.clear(); // Очищаем кэш
       setRenderKey(prev => prev + 1);
     }, 100); // Небольшая задержка для завершения рендера таблицы
     
@@ -58,6 +118,7 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
   // Дополнительный пересчет при изменении состояния сворачивания (с учетом анимации)
   React.useEffect(() => {
     const timer = setTimeout(() => {
+      domCache.current.clear(); // Очищаем кэш
       setRenderKey(prev => prev + 1);
     }, 350); // 350ms = 300ms анимация + 50ms буфер
     
@@ -67,6 +128,7 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
   // Мгновенный пересчет позиций при принудительном обновлении
   React.useEffect(() => {
     if (forcePositionUpdate > 0) {
+      domCache.current.clear(); // Очищаем кэш
       setRenderKey(prev => prev + 1);
     }
   }, [forcePositionUpdate]);
@@ -129,8 +191,8 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
     return allBars;
   };
 
-  // Функция для рендера одной полосы события
-  const renderEventBar = (event: PromoEvent, rowIndex: number) => {
+  // Функция для рендера одной полосы события (оптимизированная)
+  const renderEventBar = React.useCallback((event: PromoEvent, rowIndex: number) => {
     const eventStart = dayjs.utc(event.start_date);
     const eventEnd = dayjs.utc(event.end_date);
     
@@ -147,36 +209,32 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
       return null;
     }
 
-    // Вычисляем позицию и размеры полосы на основе реальных ячеек таблицы
-    if (!tableRef.current) return null;
-
     const startDay = visibleStart.date();
     const endDay = visibleEnd.date();
     
-    // Находим ячейки начального и конечного дня
-    const startCellSelector = `[data-cell-key="${project}-${event.promo_type}-${startDay}"]`;
-    const endCellSelector = `[data-cell-key="${project}-${event.promo_type}-${endDay}"]`;
+    // Создаем ключ для кэша DOM данных
+    const cacheKey = `${project}-${event.promo_type}-${selectedMonth}-${selectedYear}-${renderKey}`;
     
-    const startCell = tableRef.current.querySelector(startCellSelector) as HTMLElement;
-    const endCell = tableRef.current.querySelector(endCellSelector) as HTMLElement;
+    // Получаем кэшированные DOM данные
+    const domData = getCachedDOMData(cacheKey);
+    if (!domData) return null;
     
-    if (!startCell || !endCell) {
-      // Если ячейки не найдены, возможно строка свернута или еще не отрендерена
+    // Получаем позиции ячеек из кэша
+    const startCellRect = domData.cellRects.get(`${event.promo_type}-${startDay}`);
+    const endCellRect = domData.cellRects.get(`${event.promo_type}-${endDay}`);
+    
+    if (!startCellRect || !endCellRect) {
+      // Если ячейки не найдены в кэше, возможно строка свернута
       return null;
     }
-
-    // Получаем позиции ячеек относительно таблицы
-    const tableRect = tableRef.current.getBoundingClientRect();
-    const startCellRect = startCell.getBoundingClientRect();
-    const endCellRect = endCell.getBoundingClientRect();
     
-    // Вычисляем позицию X и ширину
-    const leftOffset = startCellRect.left - tableRect.left;
-    const rightOffset = endCellRect.right - tableRect.left;
+    // Вычисляем позицию X и ширину используя кэшированные данные
+    const leftOffset = startCellRect.left - domData.tableRect.left;
+    const rightOffset = endCellRect.right - domData.tableRect.left;
     const barWidth = rightOffset - leftOffset;
     
     // Позиция Y - используем позицию ячейки + смещение для строки события
-    const topOffset = startCellRect.top - tableRect.top + (rowIndex * 24) + 6;
+    const topOffset = startCellRect.top - domData.tableRect.top + (rowIndex * 24) + 6;
 
     return (
       <Tooltip
@@ -252,7 +310,9 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
         </Box>
       </Tooltip>
     );
-  };
+  }, [selectedMonth, selectedYear, getCachedDOMData, getEventColor, handleContextMenu, 
+      highlightedEventId, setHighlightedEventId, getEventTooltipContent, 
+      pulseAnimation, project, renderKey]);
 
   return (
     <Box
@@ -275,4 +335,51 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
   );
 };
 
-export default EventBarsLayer; 
+// Мемоизированная версия компонента с кастомной функцией сравнения
+export default React.memo(EventBarsLayer, (prevProps, nextProps) => {
+  // Проверяем основные скалярные значения
+  if (
+    prevProps.project !== nextProps.project ||
+    prevProps.selectedMonth !== nextProps.selectedMonth ||
+    prevProps.selectedYear !== nextProps.selectedYear ||
+    prevProps.projectIndex !== nextProps.projectIndex ||
+    prevProps.highlightedEventId !== nextProps.highlightedEventId ||
+    prevProps.forcePositionUpdate !== nextProps.forcePositionUpdate
+  ) {
+    return false;
+  }
+
+  // Проверяем события - сравниваем по ключам
+  if (!shallowCompareArrays(prevProps.events, nextProps.events, createEventKey)) {
+    return false;
+  }
+
+  // Проверяем дни
+  if (!shallowCompareArrays(
+    prevProps.days, 
+    nextProps.days, 
+    (day) => `${day.dayOfMonth}-${day.dayOfWeek}-${day.isWeekend}`
+  )) {
+    return false;
+  }
+
+  // Проверяем PROMO_TYPES (должен быть стабильным)
+  if (prevProps.PROMO_TYPES !== nextProps.PROMO_TYPES) {
+    return false;
+  }
+
+  // Проверяем объект collapsedPromoTypes
+  const prevCollapsed = JSON.stringify(prevProps.collapsedPromoTypes);
+  const nextCollapsed = JSON.stringify(nextProps.collapsedPromoTypes);
+  if (prevCollapsed !== nextCollapsed) {
+    return false;
+  }
+
+  // Проверяем ref объекты
+  if (prevProps.tableRef !== nextProps.tableRef) {
+    return false;
+  }
+
+  // Функции-колбэки предполагаются стабильными
+  return true; // Компоненты равны, ререндер не нужен
+}); 

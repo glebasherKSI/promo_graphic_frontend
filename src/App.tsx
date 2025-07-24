@@ -24,6 +24,7 @@ import axios from 'axios';
 import EventDialog from './components/EventDialog';
 import PromoEventDialog from './components/PromoEventDialog';
 import InfoChannelDialog from './components/InfoChannelDialog';
+import ProfileEditDialog from './components/ProfileEditDialog';
 import { CHANNEL_TYPES } from './constants/promoTypes';
 import dayjs from 'dayjs';
 
@@ -212,6 +213,7 @@ function App() {
   const [openCreateDialog, setOpenCreateDialog] = useState(false);
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [openChannelDialog, setOpenChannelDialog] = useState(false);
+  const [openProfileDialog, setOpenProfileDialog] = useState(false);
   const [editingEvent, setEditingEvent] = useState<PromoEvent | null>(null);
   const [editingChannel, setEditingChannel] = useState<InfoChannel | null>(null);
   
@@ -331,6 +333,10 @@ function App() {
     setEditingChannel(null);
   };
 
+  const handleProfileDialogClose = () => {
+    setOpenProfileDialog(false);
+  };
+
   const handleCalendarEventDialogClose = () => {
     setOpenCalendarEventDialog(false);
     setCalendarEventData(null);
@@ -423,6 +429,24 @@ function App() {
     }
   };
 
+  const handleProfileSave = async (profileData: Partial<User>, userId: string): Promise<void> => {
+    try {
+      const response = await axios.put(`/api/users/${userId}`, profileData);
+      
+      if (response.status === 200) {
+        // Обновляем информацию о пользователе в состоянии
+        setAuth(prev => ({
+          ...prev,
+          user: { ...prev.user!, ...profileData }
+        }));
+        handleProfileDialogClose();
+      }
+    } catch (error) {
+      console.error('Ошибка при сохранении профиля:', error);
+      throw error;
+    }
+  };
+
   const handleEventDelete = async (eventId: string): Promise<void> => {
     try {
       const response = await axios.delete(`/api/events/${eventId}`);
@@ -483,14 +507,22 @@ function App() {
                   variant="outlined"
                   size="small"
                 />
-            <Button
+                <Button
+                  variant="outlined" 
+                  color="inherit" 
+                  onClick={() => setOpenProfileDialog(true)}
+                  size="small"
+                >
+                  Профиль
+                </Button>
+                <Button
                   variant="outlined" 
                   color="inherit" 
                   onClick={handleLogout}
                   size="small"
-            >
+                >
                   Выйти
-            </Button>
+                </Button>
               </Stack>
             </Box>
 
@@ -600,6 +632,14 @@ function App() {
               } as InfoChannel : null}
               projects={PROJECTS}
               events={events}
+            />
+
+            {/* Диалог редактирования профиля */}
+            <ProfileEditDialog
+              open={openProfileDialog}
+              onClose={handleProfileDialogClose}
+              onSave={handleProfileSave}
+              user={auth.user}
             />
         </Container>
         </Router>

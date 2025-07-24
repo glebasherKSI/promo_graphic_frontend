@@ -17,6 +17,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import dayjs from '../utils/dayjs';
 import { PromoEvent, InfoChannel } from '../types';
+import { shallowCompareArrays, createEventKey } from '../utils/memoization';
 
 interface ProjectCalendarTableProps {
   project: string;
@@ -428,4 +429,55 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
   );
 };
 
-export default ProjectCalendarTable; 
+// Мемоизированная версия компонента с кастомной функцией сравнения
+export default React.memo(ProjectCalendarTable, (prevProps, nextProps) => {
+  // Проверяем основные скалярные значения
+  if (
+    prevProps.project !== nextProps.project ||
+    prevProps.projectIndex !== nextProps.projectIndex ||
+    prevProps.daysInMonth !== nextProps.daysInMonth ||
+    prevProps.highlightedEventId !== nextProps.highlightedEventId ||
+    prevProps.isAdmin !== nextProps.isAdmin
+  ) {
+    return false;
+  }
+
+  // Проверяем массивы PROMO_TYPES и CHANNEL_TYPES (они readonly, поэтому должны быть стабильными)
+  if (
+    prevProps.PROMO_TYPES !== nextProps.PROMO_TYPES ||
+    prevProps.CHANNEL_TYPES !== nextProps.CHANNEL_TYPES
+  ) {
+    return false;
+  }
+
+  // Проверяем события - сравниваем по ключам для оптимизации
+  if (!shallowCompareArrays(prevProps.events, nextProps.events, createEventKey)) {
+    return false;
+  }
+
+  // Проверяем дни - поверхностное сравнение
+  if (!shallowCompareArrays(
+    prevProps.days, 
+    nextProps.days, 
+    (day) => `${day.dayOfMonth}-${day.dayOfWeek}-${day.isWeekend}`
+  )) {
+    return false;
+  }
+
+  // Проверяем объект collapsedPromoTypes
+  const prevCollapsed = JSON.stringify(prevProps.collapsedPromoTypes);
+  const nextCollapsed = JSON.stringify(nextProps.collapsedPromoTypes);
+  if (prevCollapsed !== nextCollapsed) {
+    return false;
+  }
+
+  // Проверяем ref объекты (они должны быть стабильными между рендерами)
+  if (prevProps.tableRef !== nextProps.tableRef) {
+    return false;
+  }
+
+  // Все функции-колбэки предполагаются стабильными (обернутые в useCallback в родителе)
+  // Если они не стабильные, компонент будет ререндериться, но это ожидаемое поведение
+
+  return true; // Компоненты равны, ререндер не нужен
+}); 
