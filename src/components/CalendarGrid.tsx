@@ -479,6 +479,19 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     `;
     document.head.appendChild(style);
     
+    // Проверяем что стили применились
+    setTimeout(() => {
+      const testElement = document.createElement('div');
+      testElement.className = 'calendar-cell-selectable';
+      document.body.appendChild(testElement);
+      const computedStyle = window.getComputedStyle(testElement);
+      console.log('🎨 CSS стили загружены:', {
+        cursor: computedStyle.cursor,
+        userSelect: computedStyle.userSelect
+      });
+      document.body.removeChild(testElement);
+    }, 100);
+    
     return () => {
       document.head.removeChild(style);
     };
@@ -970,6 +983,8 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   }, [updateCellSelection, handleCellContextMenu]);
 
   const handleCellMouseDown = useCallback((cellKey: string, event: React.MouseEvent) => {
+    console.log('🖱️ MouseDown:', cellKey, 'button:', event.button, 'buttons:', event.buttons);
+    
     if (event.button === 0) { // Левая кнопка мыши
       event.preventDefault();
       event.stopPropagation();
@@ -988,6 +1003,8 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
         // Сразу выделяем начальную ячейку
         selectedCellsRef.current.add(cellKey);
         updateCellSelection(cellKey, true);
+        
+        console.log('🚀 Начало drag selection:', cellKey);
       }
     }
   }, [updateCellSelection]);
@@ -995,6 +1012,8 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   // Обработчик для drag selection при наведении мыши
   const handleCellMouseEnter = useCallback((cellKey: string, event: React.MouseEvent) => {
     if (isDragging && dragStartCell && event.buttons === 1) { // Проверяем что ЛКМ всё еще зажата
+      console.log('🖱️ MouseEnter во время drag:', cellKey, 'buttons:', event.buttons);
+      
       // Получаем все ячейки между начальной и текущей
       const startParts = dragStartCell.split('-');
       const currentParts = cellKey.split('-');
@@ -1048,6 +1067,8 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       if (cell) {
         const cellKey = cell.getAttribute('data-cell-key');
         if (cellKey && cellKey !== dragStartCell) {
+          console.log('🖱️ Global MouseMove:', cellKey, 'buttons:', event.buttons);
+          
           // Получаем все ячейки между начальной и текущей
           const startParts = dragStartCell.split('-');
           const currentParts = cellKey.split('-');
@@ -1085,6 +1106,8 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
 
   // Добавляем глобальные обработчики
   React.useEffect(() => {
+    console.log('🔧 Установка глобальных обработчиков событий');
+    
     document.addEventListener('mouseup', handleMouseUp);
     document.addEventListener('mousemove', handleMouseMove);
     
@@ -1098,13 +1121,31 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     document.addEventListener('selectstart', preventSelection);
     document.addEventListener('dragstart', preventSelection);
     
+    // Дополнительная проверка для продакшена - принудительная установка обработчиков
+    const tableContainer = document.querySelector('.MuiTableContainer-root');
+    if (tableContainer) {
+      console.log('🔧 Найден контейнер таблицы, добавляем обработчики');
+      tableContainer.addEventListener('mousedown', (e) => {
+        const mouseEvent = e as MouseEvent;
+        const target = mouseEvent.target as HTMLElement;
+        const cell = target.closest('.calendar-cell-selectable');
+        if (cell) {
+          const cellKey = cell.getAttribute('data-cell-key');
+          if (cellKey && mouseEvent.button === 0) {
+            console.log('🔧 Fallback mousedown:', cellKey);
+            handleCellMouseDown(cellKey, mouseEvent as any);
+          }
+        }
+      });
+    }
+    
     return () => {
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('selectstart', preventSelection);
       document.removeEventListener('dragstart', preventSelection);
     };
-  }, [handleMouseUp, handleMouseMove, isDragging]);
+  }, [handleMouseUp, handleMouseMove, isDragging, handleCellMouseDown]);
 
   const isCellSelected = useCallback((cellKey: string) => {
     return selectedCellsRef.current.has(cellKey);
