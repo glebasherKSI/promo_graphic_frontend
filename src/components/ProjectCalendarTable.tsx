@@ -44,6 +44,7 @@ interface ProjectCalendarTableProps {
   tableRef: React.RefObject<HTMLTableElement>;
   collapsedPromoTypes: {[projectType: string]: boolean};
   togglePromoTypeCollapse: (project: string, promoType: string) => void;
+
 }
 
 const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
@@ -146,7 +147,7 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
               height: '32px'
             }}
           >
-            {project}
+            <Typography variant="body2">{project}</Typography>
           </TableCell>
           {days.map(({ dayOfMonth, isWeekend }) => (
             <TableCell
@@ -475,6 +476,8 @@ export default React.memo(ProjectCalendarTable, (prevProps, nextProps) => {
   if (prevProps.tableRef !== nextProps.tableRef) {
     return false;
   }
+
+
 
   // Все функции-колбэки предполагаются стабильными (обернутые в useCallback в родителе)
   // Если они не стабильные, компонент будет ререндериться, но это ожидаемое поведение

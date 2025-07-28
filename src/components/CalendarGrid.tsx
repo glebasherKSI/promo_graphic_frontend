@@ -135,21 +135,29 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   // Создаем refs для каждого проекта
   const projectTableRefs = useRef<{[key: string]: React.RefObject<HTMLTableElement>}>({});
   
-  // === НАСТОЯЩАЯ ВИРТУАЛИЗАЦИЯ НА ОСНОВЕ ВИДИМОСТИ ===
+  // === УЛУЧШЕННАЯ ВИРТУАЛИЗАЦИЯ С ЛОАДЕРАМИ ===
   // Состояние для виртуализации
   const [visibleProjects, setVisibleProjects] = useState<Set<string>>(new Set());
   const [projectVisibility, setProjectVisibility] = useState<{[key: string]: boolean}>({});
+  const [loadingProjects, setLoadingProjects] = useState<Set<string>>(new Set());
   const observerRef = useRef<IntersectionObserver | null>(null);
   const projectElementRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const loadingTimeoutRef = useRef<{[key: string]: NodeJS.Timeout}>({});
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastScrollTimeRef = useRef<number>(0);
+  const observerThrottleRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingObserverUpdates = useRef<Set<string>>(new Set());
 
-  // Буфер проектов (рендерим видимые + по 1 до/после для плавности)
+  // Сбалансированная оптимизация
   const bufferSize = 1;
+  const maxVisibleProjects = 4; // Увеличиваем лимит
+  const renderBatchSize = 1;
 
-  // Функция для определения проектов к рендеру
+  // Исправленная функция для определения проектов к рендеру
   const getProjectsToRender = useCallback(() => {
     if (visibleProjects.size === 0) {
-      // Если ничего не видно, показываем первые 3 проекта
-      return new Set(selectedProjects.slice(0, Math.min(3, selectedProjects.length)));
+      // Если ничего не видно, показываем первые 2 проекта
+      return new Set(selectedProjects.slice(0, Math.min(2, selectedProjects.length)));
     }
 
     const visibleIndices = Array.from(visibleProjects)
@@ -158,23 +166,36 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       .sort((a, b) => a - b);
 
     if (visibleIndices.length === 0) {
-      return new Set(selectedProjects.slice(0, Math.min(3, selectedProjects.length)));
+      return new Set(selectedProjects.slice(0, Math.min(2, selectedProjects.length)));
     }
 
+    const projectsToRender = new Set<string>();
+    
+    // Добавляем видимые проекты
+    visibleIndices.forEach(index => {
+      projectsToRender.add(selectedProjects[index]);
+    });
+
+    // Добавляем буфер проектов
     const minIndex = Math.max(0, visibleIndices[0] - bufferSize);
     const maxIndex = Math.min(selectedProjects.length - 1, visibleIndices[visibleIndices.length - 1] + bufferSize);
-
-    const projectsToRender = new Set<string>();
+    
     for (let i = minIndex; i <= maxIndex; i++) {
       projectsToRender.add(selectedProjects[i]);
     }
 
+    // Ограничиваем количество
+    if (projectsToRender.size > maxVisibleProjects) {
+      const projectsArray = Array.from(projectsToRender);
+      return new Set(projectsArray.slice(0, maxVisibleProjects));
+    }
+
     return projectsToRender;
-  }, [visibleProjects, selectedProjects, bufferSize]);
+  }, [visibleProjects, selectedProjects, bufferSize, maxVisibleProjects]);
 
-  const projectsToRender = getProjectsToRender();
+  const projectsToRender = useMemo(() => getProjectsToRender(), [getProjectsToRender]);
 
-  // Функция для регистрации ref проекта
+  // Функция для регистрации ref проекта с лоадером
   const registerProjectRef = useCallback((project: string, element: HTMLDivElement | null) => {
     if (element) {
       projectElementRefs.current.set(project, element);
@@ -184,10 +205,35 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       }
     } else {
       projectElementRefs.current.delete(project);
+      // Очищаем таймаут при удалении элемента
+      if (loadingTimeoutRef.current[project]) {
+        clearTimeout(loadingTimeoutRef.current[project]);
+        delete loadingTimeoutRef.current[project];
+      }
     }
   }, []);
 
-  // Инициализация Intersection Observer
+  // Функция для запуска лоадера проекта
+  const startProjectLoading = useCallback((project: string) => {
+    setLoadingProjects(prev => new Set(prev).add(project));
+    
+    // Очищаем предыдущий таймаут для этого проекта
+    if (loadingTimeoutRef.current[project]) {
+      clearTimeout(loadingTimeoutRef.current[project]);
+    }
+    
+    // Устанавливаем таймаут для имитации загрузки
+    loadingTimeoutRef.current[project] = setTimeout(() => {
+      setLoadingProjects(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(project);
+        return newSet;
+      });
+      delete loadingTimeoutRef.current[project];
+    }, 200); // Увеличиваем время загрузки для стабильности
+  }, []);
+
+  // Инициализация Intersection Observer с упрощенной логикой
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -204,31 +250,42 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
 
         setVisibleProjects(prev => {
           const newVisible = new Set(prev);
+          let hasChanges = false;
+          
           entries.forEach(entry => {
             const projectId = entry.target.getAttribute('data-project-id');
             if (projectId) {
               if (entry.isIntersecting) {
-                newVisible.add(projectId);
-                console.log(`📊 Проект "${projectId}" стал видимым`);
+                if (!prev.has(projectId)) {
+                  newVisible.add(projectId);
+                  hasChanges = true;
+                  startProjectLoading(projectId);
+                }
               } else {
-                newVisible.delete(projectId);
-                console.log(`📊 Проект "${projectId}" скрыт`);
+                if (prev.has(projectId)) {
+                  newVisible.delete(projectId);
+                  hasChanges = true;
+                }
               }
             }
           });
           
-          // Логирование статистики виртуализации
-          if (newVisible.size !== prev.size) {
-            console.log(`📊 Виртуализация: видимых ${newVisible.size}, всего ${selectedProjects.length}`);
+          // Добавляем отладочную информацию
+          if (hasChanges) {
+            console.log('📊 Обновление видимых проектов:', {
+              новые: Array.from(newVisible),
+              было: Array.from(prev),
+              всего: selectedProjects.length
+            });
           }
           
-          return newVisible;
+          return hasChanges ? newVisible : prev;
         });
       },
       {
         root: null, // viewport
-        rootMargin: '200px', // Начинаем загрузку за 200px до появления
-        threshold: 0.1 // Считаем видимым при 10% видимости
+        rootMargin: '300px 0px', // Увеличиваем margin сверху и снизу
+        threshold: [0, 0.1, 0.5, 1] // Множественные пороги для лучшего обнаружения
       }
     );
 
@@ -236,8 +293,138 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
 
     return () => {
       observer.disconnect();
+      // Очищаем все таймауты при размонтировании
+      Object.values(loadingTimeoutRef.current).forEach(timeout => {
+        clearTimeout(timeout);
+      });
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      if (observerThrottleRef.current) {
+        clearTimeout(observerThrottleRef.current);
+      }
     };
   }, [selectedProjects]);
+
+  // Принудительная инициализация первых проектов
+  useEffect(() => {
+    if (selectedProjects.length > 0 && visibleProjects.size === 0) {
+      const initialProjects = selectedProjects.slice(0, 3); // Увеличиваем до 3 проектов
+      setVisibleProjects(new Set(initialProjects));
+      console.log('🚀 Инициализация первых проектов:', initialProjects);
+    }
+  }, [selectedProjects, visibleProjects.size]);
+
+  // Дополнительная логика для загрузки верхних проектов
+  useEffect(() => {
+    if (visibleProjects.size > 0) {
+      const visibleArray = Array.from(visibleProjects);
+      const visibleIndices = visibleArray.map(project => selectedProjects.indexOf(project)).filter(i => i !== -1);
+      
+      if (visibleIndices.length > 0) {
+        const minVisibleIndex = Math.min(...visibleIndices);
+        
+        // Если самый верхний видимый проект не первый, добавляем проекты выше
+        if (minVisibleIndex > 0) {
+          const projectsToAdd: string[] = [];
+          for (let i = Math.max(0, minVisibleIndex - 2); i < minVisibleIndex; i++) {
+            if (!visibleProjects.has(selectedProjects[i])) {
+              projectsToAdd.push(selectedProjects[i]);
+            }
+          }
+          
+          if (projectsToAdd.length > 0) {
+            setVisibleProjects(prev => {
+              const newSet = new Set(prev);
+              projectsToAdd.forEach(project => newSet.add(project));
+              return newSet;
+            });
+            console.log('⬆️ Автоматическая загрузка верхних проектов:', projectsToAdd);
+          }
+        }
+      }
+    }
+  }, [visibleProjects, selectedProjects]);
+
+  // Обработчик скролла для загрузки верхних и нижних проектов
+  useEffect(() => {
+    let scrollTimeout: NodeJS.Timeout | null = null;
+    
+    const handleScroll = () => {
+      // Throttling для предотвращения перегрузки
+      if (scrollTimeout) return;
+      
+      scrollTimeout = setTimeout(() => {
+        scrollTimeout = null;
+        
+        const scrollTop = window.scrollY;
+      const viewportHeight = window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
+      
+      // Если скролл близко к верху, загружаем верхние проекты
+      if (scrollTop < 200) {
+        const currentVisible = Array.from(visibleProjects);
+        const currentIndices = currentVisible.map(project => selectedProjects.indexOf(project)).filter(i => i !== -1);
+        
+        if (currentIndices.length > 0) {
+          const minVisibleIndex = Math.min(...currentIndices);
+          const projectsToAdd: string[] = [];
+          
+          // Добавляем проекты выше текущих видимых
+          for (let i = Math.max(0, minVisibleIndex - 3); i < minVisibleIndex; i++) {
+            if (!visibleProjects.has(selectedProjects[i])) {
+              projectsToAdd.push(selectedProjects[i]);
+            }
+          }
+          
+          if (projectsToAdd.length > 0) {
+            setVisibleProjects(prev => {
+              const newSet = new Set(prev);
+              projectsToAdd.forEach(project => newSet.add(project));
+              return newSet;
+            });
+            console.log('⬆️ Загрузка верхних проектов:', projectsToAdd);
+          }
+        }
+      }
+      
+      // Если скролл близко к низу, загружаем нижние проекты
+      if (scrollTop + viewportHeight > documentHeight - 200) {
+        const currentVisible = Array.from(visibleProjects);
+        const currentIndices = currentVisible.map(project => selectedProjects.indexOf(project)).filter(i => i !== -1);
+        
+        if (currentIndices.length > 0) {
+          const maxVisibleIndex = Math.max(...currentIndices);
+          const projectsToAdd: string[] = [];
+          
+          // Добавляем проекты ниже текущих видимых
+          for (let i = maxVisibleIndex + 1; i < Math.min(selectedProjects.length, maxVisibleIndex + 4); i++) {
+            if (!visibleProjects.has(selectedProjects[i])) {
+              projectsToAdd.push(selectedProjects[i]);
+            }
+          }
+          
+          if (projectsToAdd.length > 0) {
+            setVisibleProjects(prev => {
+              const newSet = new Set(prev);
+              projectsToAdd.forEach(project => newSet.add(project));
+              return newSet;
+            });
+            console.log('⬇️ Загрузка нижних проектов:', projectsToAdd);
+          }
+        }
+      }
+    }, 100); // Throttle 100ms
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout);
+      }
+    };
+  }, [visibleProjects, selectedProjects]);
   
   // Инициализируем refs для выбранных проектов
   selectedProjects.forEach(project => {
@@ -256,6 +443,8 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
         background-color: rgba(33, 150, 243, 0.3) !important;
         outline: 2px solid #2196f3 !important;
         outline-offset: -1px !important;
+        position: relative;
+        z-index: 1;
       }
       .calendar-cell-selected:hover {
         background-color: rgba(33, 150, 243, 0.4) !important;
@@ -264,7 +453,29 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
         cursor: pointer;
         user-select: none;
         transition: background-color 0.1s ease-in-out;
+        position: relative;
       }
+      .calendar-cell-selectable:hover {
+        background-color: rgba(255, 255, 255, 0.1) !important;
+      }
+      .calendar-cell-selectable:active {
+        background-color: rgba(33, 150, 243, 0.2) !important;
+      }
+      @keyframes pulse {
+        0% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.7;
+          transform: scale(1.05);
+        }
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
     `;
     document.head.appendChild(style);
     
@@ -686,6 +897,11 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     // Только для левого клика (выделение ячеек)
     if (event.button !== 0) return; // Обрабатываем только ЛКМ
 
+    // Если мы в процессе drag selection, не обрабатываем клик
+    if (isDragging) {
+      return;
+    }
+
     // Останавливаем всплытие и поведение по умолчанию
     event.preventDefault();
     event.stopPropagation();
@@ -713,7 +929,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       updateCellSelection(cellKey, true);
       setSelectionStart(cellKey);
     }
-  }, [selectionStart, updateCellSelection]);
+  }, [selectionStart, updateCellSelection, isDragging]);
 
   // Восстановление выделения после ререндера
   React.useEffect(() => {
@@ -760,15 +976,23 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       setIsSelecting(true);
       
       if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
+        // Очищаем предыдущее выделение при начале drag
+        selectedCellsRef.current.forEach(key => updateCellSelection(key, false));
+        selectedCellsRef.current.clear();
+        
         setSelectionStart(cellKey);
         // Начинаем drag selection
         setIsDragging(true);
         setDragStartCell(cellKey);
+        
+        // Сразу выделяем начальную ячейку
+        selectedCellsRef.current.add(cellKey);
+        updateCellSelection(cellKey, true);
       }
     }
-  }, []);
+  }, [updateCellSelection]);
 
-  // Новый обработчик для drag selection при наведении мыши
+  // Обработчик для drag selection при наведении мыши
   const handleCellMouseEnter = useCallback((cellKey: string, event: React.MouseEvent) => {
     if (isDragging && dragStartCell && event.buttons === 1) { // Проверяем что ЛКМ всё еще зажата
       // Получаем все ячейки между начальной и текущей
@@ -798,33 +1022,105 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
           selectedCellsRef.current.add(rangeCellKey);
           updateCellSelection(rangeCellKey, true);
         }
+        
+        console.log(`Drag selection: ${minDay} - ${maxDay} дней в строке ${startRowType}`);
       }
     }
-  }, [isDragging, dragStartCell, updateCellSelection]);
+  }, [isDragging, dragStartCell, updateCellSelection, getCellKey]);
 
   // Обработчик завершения drag selection
   const handleMouseUp = useCallback((event: MouseEvent) => {
     if (isDragging) {
+      console.log('Завершение drag selection');
       setIsDragging(false);
       setDragStartCell(null);
       setIsSelecting(false);
     }
   }, [isDragging]);
 
-  // Добавляем глобальный обработчик mouseup
+  // Глобальный обработчик mousemove для drag selection
+  const handleMouseMove = useCallback((event: MouseEvent) => {
+    if (isDragging && dragStartCell && event.buttons === 1) {
+      // Находим элемент под курсором
+      const target = event.target as HTMLElement;
+      const cell = target.closest('.calendar-cell-selectable') as HTMLElement;
+      
+      if (cell) {
+        const cellKey = cell.getAttribute('data-cell-key');
+        if (cellKey && cellKey !== dragStartCell) {
+          // Получаем все ячейки между начальной и текущей
+          const startParts = dragStartCell.split('-');
+          const currentParts = cellKey.split('-');
+          
+          // Проверяем что это ячейки из одной строки (одинаковый проект и тип)
+          const startProject = startParts[0];
+          const startRowType = startParts.slice(1, -1).join('-');
+          const currentProject = currentParts[0];
+          const currentRowType = currentParts.slice(1, -1).join('-');
+          
+          if (startProject === currentProject && startRowType === currentRowType) {
+            const startDay = parseInt(startParts[startParts.length - 1]);
+            const currentDay = parseInt(currentParts[currentParts.length - 1]);
+            
+            // Очищаем предыдущее выделение
+            selectedCellsRef.current.forEach(key => updateCellSelection(key, false));
+            selectedCellsRef.current.clear();
+            
+            // Выделяем диапазон от startDay до currentDay
+            const minDay = Math.min(startDay, currentDay);
+            const maxDay = Math.max(startDay, currentDay);
+            
+            for (let day = minDay; day <= maxDay; day++) {
+              const rangeCellKey = getCellKey(startProject, startRowType, day);
+              selectedCellsRef.current.add(rangeCellKey);
+              updateCellSelection(rangeCellKey, true);
+            }
+            
+            console.log(`Global drag selection: ${minDay} - ${maxDay} дней в строке ${startRowType}`);
+          }
+        }
+      }
+    }
+  }, [isDragging, dragStartCell, updateCellSelection, getCellKey]);
+
+  // Добавляем глобальные обработчики
   React.useEffect(() => {
     document.addEventListener('mouseup', handleMouseUp);
-    return () => document.removeEventListener('mouseup', handleMouseUp);
-  }, [handleMouseUp]);
+    document.addEventListener('mousemove', handleMouseMove);
+    
+    // Предотвращаем выделение текста во время drag
+    const preventSelection = (e: Event) => {
+      if (isDragging) {
+        e.preventDefault();
+      }
+    };
+    
+    document.addEventListener('selectstart', preventSelection);
+    document.addEventListener('dragstart', preventSelection);
+    
+    return () => {
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('selectstart', preventSelection);
+      document.removeEventListener('dragstart', preventSelection);
+    };
+  }, [handleMouseUp, handleMouseMove, isDragging]);
 
   const isCellSelected = useCallback((cellKey: string) => {
     return selectedCellsRef.current.has(cellKey);
   }, []);
 
+  
+
   // Очистка выделения при клике вне ячеек
   const handleTableClick = useCallback((event: React.MouseEvent) => {
     // Обрабатываем только левый клик
     if (event.button !== 0) return;
+    
+    // Если мы в процессе drag selection, не очищаем выделение
+    if (isDragging) {
+      return;
+    }
     
     // Очищаем выделение только если клик был не по ячейке и не по контекстному меню
     const target = event.target as HTMLElement;
@@ -836,7 +1132,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       selectedCellsRef.current.clear();
       setSelectionStart(null);
     }
-  }, [updateCellSelection]);
+  }, [updateCellSelection, isDragging]);
 
   // Обработчики создания событий и каналов
   const handleCreatePromoEvent = useCallback(() => {
@@ -1051,6 +1347,18 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
         {selectedProjects.map((project: string, projectIndex: number) => {
           const currentTableRef = projectTableRefs.current[project];
           const shouldRender = projectsToRender.has(project);
+          const isLoading = loadingProjects.has(project);
+          const isVisible = visibleProjects.has(project);
+          
+          // Отладочная информация для первых проектов
+          if (projectIndex < 3) {
+            console.log(`🔍 Проект ${project}:`, {
+              shouldRender,
+              isLoading,
+              isVisible,
+              вРендере: projectsToRender.has(project)
+            });
+          }
           
           return (
             <div
@@ -1089,6 +1397,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                     tableRef={currentTableRef}
                     collapsedPromoTypes={collapsedPromoTypes}
                     togglePromoTypeCollapse={togglePromoTypeCollapse}
+
                   />
                   <EventBarsLayer
                     project={project}
@@ -1110,7 +1419,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                   />
                 </Box>
               ) : (
-                // Placeholder для невидимых проектов
+                // Упрощенный placeholder для максимальной производительности
                 <Box 
                   sx={{ 
                     height: '400px', 
@@ -1120,12 +1429,16 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                     backgroundColor: '#1a2332',
                     borderRadius: 2,
                     border: '1px solid #333a56',
-                    opacity: 0.5
+                    opacity: 0.3
                   }}
                 >
-                  <Typography variant="h6" sx={{ color: '#666', opacity: 0.7 }}>
-                    {project} (виртуализирован)
-                  </Typography>
+                  {isLoading ? (
+                    <CircularProgress size={30} sx={{ color: '#2196f3' }} />
+                  ) : (
+                    <Typography variant="body2" sx={{ color: '#666' }}>
+                      {project}
+                    </Typography>
+                  )}
                 </Box>
               )}
             </div>

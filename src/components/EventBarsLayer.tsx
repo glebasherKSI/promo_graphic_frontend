@@ -242,16 +242,24 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
         title={getEventTooltipContent(event, false)}
         placement="top"
         arrow
+        enterDelay={200}
+        leaveDelay={0}
+        enterNextDelay={100}
         PopperProps={{
           sx: {
             '& .MuiTooltip-tooltip': {
-              bgcolor: '#333a56',
+              bgcolor: 'rgba(51, 58, 86, 0.65)',
               color: '#eff0f1',
               p: 0,
-              maxWidth: 'none'
+              maxWidth: 'none',
+              backdropFilter: 'blur(8px)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+              fontSize: '0.85rem',
+              lineHeight: 1.4
             },
             '& .MuiTooltip-arrow': {
-              color: '#333a56'
+              color: 'rgba(51, 58, 86, 0.65)'
             }
           }
         }}
@@ -282,6 +290,7 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
               zIndex: 20
             }),
           }}
+          className={highlightedEventId === event.id ? 'highlighted-element' : ''}
           onContextMenu={(e: React.MouseEvent) => handleContextMenu(e, event, false)}
           onClick={(e: React.MouseEvent) => {
             e.preventDefault();
