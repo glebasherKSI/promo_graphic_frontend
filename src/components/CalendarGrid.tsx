@@ -270,15 +270,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
             }
           });
           
-          // Добавляем отладочную информацию
-          if (hasChanges) {
-            console.log('📊 Обновление видимых проектов:', {
-              новые: Array.from(newVisible),
-              было: Array.from(prev),
-              всего: selectedProjects.length
-            });
-          }
-          
           return hasChanges ? newVisible : prev;
         });
       },
@@ -311,7 +302,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     if (selectedProjects.length > 0 && visibleProjects.size === 0) {
       const initialProjects = selectedProjects.slice(0, 3); // Увеличиваем до 3 проектов
       setVisibleProjects(new Set(initialProjects));
-      console.log('🚀 Инициализация первых проектов:', initialProjects);
     }
   }, [selectedProjects, visibleProjects.size]);
 
@@ -339,7 +329,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
               projectsToAdd.forEach(project => newSet.add(project));
               return newSet;
             });
-            console.log('⬆️ Автоматическая загрузка верхних проектов:', projectsToAdd);
           }
         }
       }
@@ -383,7 +372,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
               projectsToAdd.forEach(project => newSet.add(project));
               return newSet;
             });
-            console.log('⬆️ Загрузка верхних проектов:', projectsToAdd);
           }
         }
       }
@@ -410,7 +398,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
               projectsToAdd.forEach(project => newSet.add(project));
               return newSet;
             });
-            console.log('⬇️ Загрузка нижних проектов:', projectsToAdd);
           }
         }
       }
@@ -479,18 +466,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     `;
     document.head.appendChild(style);
     
-    // Проверяем что стили применились
-    setTimeout(() => {
-      const testElement = document.createElement('div');
-      testElement.className = 'calendar-cell-selectable';
-      document.body.appendChild(testElement);
-      const computedStyle = window.getComputedStyle(testElement);
-      console.log('🎨 CSS стили загружены:', {
-        cursor: computedStyle.cursor,
-        userSelect: computedStyle.userSelect
-      });
-      document.body.removeChild(testElement);
-    }, 100);
+
     
     return () => {
       document.head.removeChild(style);
@@ -846,10 +822,8 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     if (cell) {
       if (selected) {
         cell.classList.add('calendar-cell-selected');
-        console.log('Выделена ячейка:', cellKey);
       } else {
         cell.classList.remove('calendar-cell-selected');
-        console.log('Снято выделение ячейки:', cellKey);
       }
     }
   }, []);
@@ -884,7 +858,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && selectedCellsRef.current.size > 0) {
-        console.log('Очистка выделения по Escape');
         // Убираем классы выделения с DOM элементов
         selectedCellsRef.current.forEach(cellKey => {
           const cell = document.querySelector(`[data-cell-key="${cellKey}"]`);
@@ -951,14 +924,12 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       const cell = document.querySelector(`[data-cell-key="${cellKey}"]`);
       if (cell && !cell.classList.contains('calendar-cell-selected')) {
         cell.classList.add('calendar-cell-selected');
-        console.log('Восстановлено выделение ячейки после ререндера:', cellKey);
       }
     });
   });
 
   // Отдельный обработчик для правого клика (контекстное меню)
   const handleCellRightClick = useCallback((cellKey: string, event: React.MouseEvent) => {
-    console.log('ПКМ по ячейке:', cellKey, 'Выделенных ячеек:', selectedCellsRef.current.size);
     event.preventDefault();
     event.stopPropagation();
 
@@ -968,7 +939,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       if (!selectedCellsRef.current.has(cellKey)) {
         selectedCellsRef.current.add(cellKey);
         updateCellSelection(cellKey, true);
-        console.log('Добавлена ячейка к выделению при ПКМ:', cellKey);
       }
       
       handleCellContextMenu(event);
@@ -977,14 +947,11 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       selectedCellsRef.current.add(cellKey);
       updateCellSelection(cellKey, true);
       setSelectionStart(cellKey);
-      console.log('Выделена новая ячейка при ПКМ:', cellKey);
       handleCellContextMenu(event);
     }
   }, [updateCellSelection, handleCellContextMenu]);
 
   const handleCellMouseDown = useCallback((cellKey: string, event: React.MouseEvent) => {
-    console.log('🖱️ MouseDown:', cellKey, 'button:', event.button, 'buttons:', event.buttons);
-    
     if (event.button === 0) { // Левая кнопка мыши
       event.preventDefault();
       event.stopPropagation();
@@ -1003,8 +970,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
         // Сразу выделяем начальную ячейку
         selectedCellsRef.current.add(cellKey);
         updateCellSelection(cellKey, true);
-        
-        console.log('🚀 Начало drag selection:', cellKey);
       }
     }
   }, [updateCellSelection]);
@@ -1012,8 +977,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   // Обработчик для drag selection при наведении мыши
   const handleCellMouseEnter = useCallback((cellKey: string, event: React.MouseEvent) => {
     if (isDragging && dragStartCell && event.buttons === 1) { // Проверяем что ЛКМ всё еще зажата
-      console.log('🖱️ MouseEnter во время drag:', cellKey, 'buttons:', event.buttons);
-      
       // Получаем все ячейки между начальной и текущей
       const startParts = dragStartCell.split('-');
       const currentParts = cellKey.split('-');
@@ -1041,8 +1004,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
           selectedCellsRef.current.add(rangeCellKey);
           updateCellSelection(rangeCellKey, true);
         }
-        
-        console.log(`Drag selection: ${minDay} - ${maxDay} дней в строке ${startRowType}`);
       }
     }
   }, [isDragging, dragStartCell, updateCellSelection, getCellKey]);
@@ -1050,7 +1011,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   // Обработчик завершения drag selection
   const handleMouseUp = useCallback((event: MouseEvent) => {
     if (isDragging) {
-      console.log('Завершение drag selection');
       setIsDragging(false);
       setDragStartCell(null);
       setIsSelecting(false);
@@ -1067,8 +1027,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       if (cell) {
         const cellKey = cell.getAttribute('data-cell-key');
         if (cellKey && cellKey !== dragStartCell) {
-          console.log('🖱️ Global MouseMove:', cellKey, 'buttons:', event.buttons);
-          
           // Получаем все ячейки между начальной и текущей
           const startParts = dragStartCell.split('-');
           const currentParts = cellKey.split('-');
@@ -1096,8 +1054,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
               selectedCellsRef.current.add(rangeCellKey);
               updateCellSelection(rangeCellKey, true);
             }
-            
-            console.log(`Global drag selection: ${minDay} - ${maxDay} дней в строке ${startRowType}`);
           }
         }
       }
@@ -1106,8 +1062,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
 
   // Добавляем глобальные обработчики
   React.useEffect(() => {
-    console.log('🔧 Установка глобальных обработчиков событий');
-    
     document.addEventListener('mouseup', handleMouseUp);
     document.addEventListener('mousemove', handleMouseMove);
     
@@ -1121,31 +1075,13 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     document.addEventListener('selectstart', preventSelection);
     document.addEventListener('dragstart', preventSelection);
     
-    // Дополнительная проверка для продакшена - принудительная установка обработчиков
-    const tableContainer = document.querySelector('.MuiTableContainer-root');
-    if (tableContainer) {
-      console.log('🔧 Найден контейнер таблицы, добавляем обработчики');
-      tableContainer.addEventListener('mousedown', (e) => {
-        const mouseEvent = e as MouseEvent;
-        const target = mouseEvent.target as HTMLElement;
-        const cell = target.closest('.calendar-cell-selectable');
-        if (cell) {
-          const cellKey = cell.getAttribute('data-cell-key');
-          if (cellKey && mouseEvent.button === 0) {
-            console.log('🔧 Fallback mousedown:', cellKey);
-            handleCellMouseDown(cellKey, mouseEvent as any);
-          }
-        }
-      });
-    }
-    
     return () => {
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('selectstart', preventSelection);
       document.removeEventListener('dragstart', preventSelection);
     };
-  }, [handleMouseUp, handleMouseMove, isDragging, handleCellMouseDown]);
+  }, [handleMouseUp, handleMouseMove, isDragging]);
 
   const isCellSelected = useCallback((cellKey: string) => {
     return selectedCellsRef.current.has(cellKey);
@@ -1168,7 +1104,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     if (!target.closest('.calendar-cell-selectable') && 
         !target.closest('[role="menu"]') && 
         !target.closest('.MuiPaper-root')) {
-      console.log('Очистка выделения через handleTableClick');
       selectedCellsRef.current.forEach(key => updateCellSelection(key, false));
       selectedCellsRef.current.clear();
       setSelectionStart(null);
@@ -1391,15 +1326,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
           const isLoading = loadingProjects.has(project);
           const isVisible = visibleProjects.has(project);
           
-          // Отладочная информация для первых проектов
-          if (projectIndex < 3) {
-            console.log(`🔍 Проект ${project}:`, {
-              shouldRender,
-              isLoading,
-              isVisible,
-              вРендере: projectsToRender.has(project)
-            });
-          }
+
           
           return (
             <div

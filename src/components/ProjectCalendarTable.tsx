@@ -280,16 +280,13 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
                     key={dayOfMonth}
                     data-cell-key={cellKey}
                     onClick={(e) => {
-                      console.log('📱 ProjectCalendarTable onClick:', cellKey);
                       handleCellClick(cellKey, e);
                     }}
                     onContextMenu={(e) => handleCellRightClick(cellKey, e)}
                     onMouseDown={(e) => {
-                      console.log('📱 ProjectCalendarTable onMouseDown:', cellKey, 'button:', e.button);
                       handleCellMouseDown(cellKey, e);
                     }}
                     onMouseEnter={(e) => {
-                      console.log('📱 ProjectCalendarTable onMouseEnter:', cellKey, 'buttons:', e.buttons);
                       handleCellMouseEnter(cellKey, e);
                     }}
                     className={`calendar-cell-selectable ${isCellSelected(cellKey) ? 'calendar-cell-selected' : ''}`}
@@ -362,16 +359,13 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
                   key={dayOfMonth}
                   data-cell-key={cellKey}
                   onClick={(e) => {
-                    console.log('📱 ProjectCalendarTable onClick (channel):', cellKey);
                     handleCellClick(cellKey, e);
                   }}
                   onContextMenu={(e) => handleCellRightClick(cellKey, e)}
                   onMouseDown={(e) => {
-                    console.log('📱 ProjectCalendarTable onMouseDown (channel):', cellKey, 'button:', e.button);
                     handleCellMouseDown(cellKey, e);
                   }}
                   onMouseEnter={(e) => {
-                    console.log('📱 ProjectCalendarTable onMouseEnter (channel):', cellKey, 'buttons:', e.buttons);
                     handleCellMouseEnter(cellKey, e);
                   }}
                   className={`calendar-cell-selectable ${isCellSelected(cellKey) ? 'calendar-cell-selected' : ''}`}
