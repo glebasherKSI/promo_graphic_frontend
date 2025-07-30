@@ -42,6 +42,20 @@ interface PromoEventDialogProps {
   projects: string[];
 }
 
+// Локальный интерфейс для этого компонента (работает с одним проектом)
+interface PromoEventDialogFormData {
+  id?: string;
+  project: string;
+  start_date: string | null;
+  end_date: string | null;
+  name: string;
+  promo_type: string;
+  promo_kind: string;
+  comment: string;
+  segments: string;
+  link: string;
+}
+
 const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
   open,
   onClose,
@@ -50,7 +64,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
   event,
   projects
 }) => {
-  const [formData, setFormData] = useState<PromoEventFormData>({
+  const [formData, setFormData] = useState<PromoEventDialogFormData>({
     project: '',
     promo_type: '',
     promo_kind: '',
@@ -76,7 +90,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
     if (event) {
       setFormData({
         id: event.id,
-        project: event.project,
+        project: Array.isArray(event.project) ? event.project[0] || '' : event.project,
         promo_type: event.promo_type,
         promo_kind: event.promo_kind,
         name: event.name,
@@ -124,9 +138,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
     setEditingChannelIndex(null);
   }, [event]);
 
-  
-
-  const handleChange = (field: keyof PromoEventCreate, value: any) => {
+  const handleChange = (field: keyof PromoEventDialogFormData, value: any) => {
     setFormData(prev => {
       const newData = { ...prev, [field]: value };
       
@@ -214,7 +226,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
           if (channel) {
             channelsArray.push({
               type: (channel.type || CHANNEL_TYPES[0]) as ChannelType,
-              project: formData.project,
+              project: formData.project || '',
               start_date: channel.start_date || formData.start_date || dayjs.utc().format('YYYY-MM-DDTHH:mm:ss'),
               name: channel.name || formData.name,
               segments: channel.segments || formData.segments || 'СНГ',
@@ -234,7 +246,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
       }, null, 2));
 
       const eventData: PromoEventCreate = {
-        project: formData.project,
+        project: [formData.project || ''],
         promo_type: formData.promo_type,
         promo_kind: formData.promo_kind,
         name: formData.name,

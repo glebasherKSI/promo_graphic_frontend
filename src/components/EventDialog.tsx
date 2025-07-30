@@ -41,7 +41,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
   projects
 }) => {
   const [formData, setFormData] = useState<PromoEventFormData>({
-    project: '',
+    project: [],
     promo_type: '',
     promo_kind: '',
     name: '',
@@ -61,7 +61,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
     if (event) {
       setFormData({
         id: event.id,
-        project: event.project,
+        project: Array.isArray(event.project) ? event.project : [event.project],
         promo_type: event.promo_type,
         promo_kind: event.promo_kind,
         name: event.name,
@@ -93,7 +93,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
       }
     } else {
       setFormData({
-        project: '',
+        project: [],
         promo_type: '',
         promo_kind: '',
         name: '',
@@ -147,6 +147,11 @@ const EventDialog: React.FC<EventDialogProps> = ({
     try {
       setLoading(true);
       setError(null);
+      if (!formData.project || formData.project.length === 0) {
+        setError('Выберите хотя бы один проект');
+        setLoading(false);
+        return;
+      }
 
       // Преобразуем каналы в формат для API
       const channelsArray: InfoChannelCreate[] = [];
@@ -154,7 +159,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
         if (channel.type && CHANNEL_TYPES.includes(channel.type as ChannelType)) {
           channelsArray.push({
             type: channel.type as ChannelType,
-            project: formData.project,
+            project: Array.isArray(formData.project) ? (formData.project[0] || '') : formData.project || '',
             start_date: channel.start_date || formData.start_date || dayjs.utc().format('YYYY-MM-DDTHH:mm:ss'),
             name: channel.name || formData.name,
             segments: channel.segments || formData.segments || 'СНГ',
@@ -233,7 +238,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
           start_date: calculatedDate || '',
           name: formData.name || '',
           segments: formData.segments || 'СНГ',
-          project: formData.project || ''
+          project: Array.isArray(formData.project) ? (formData.project[0] || '') : formData.project || ''
         };
         console.log(`Создан канал ${type} с автоматической датой:`, calculatedDate);
       }
@@ -281,14 +286,26 @@ const EventDialog: React.FC<EventDialogProps> = ({
           <FormControl fullWidth>
             <InputLabel>Проект *</InputLabel>
             <Select
-              value={formData.project || ''}
-              onChange={(e) => handleChange('project', e.target.value)}
+              multiple
+              value={formData.project}
+              onChange={e => handleChange('project', typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}
               required
+              renderValue={(selected) => (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {(selected as string[]).map((value) => (
+                    <Chip key={value} label={value} size="small" />
+                  ))}
+                </Box>
+              )}
             >
               {projects.map(project => (
-                <MenuItem key={project} value={project}>{project}</MenuItem>
+                <MenuItem key={project} value={project}>
+                  <Checkbox checked={formData.project.indexOf(project) > -1} />
+                  <ListItemText primary={project} />
+                </MenuItem>
               ))}
             </Select>
+            <Typography variant="caption" color="textSecondary">Можно выбрать несколько проектов</Typography>
           </FormControl>
 
           {/* Тип промо */}

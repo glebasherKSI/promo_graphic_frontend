@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ThemeProvider, 
   createTheme,
@@ -240,16 +240,29 @@ function App() {
     isLoading: true
   });
 
+  // Добавляем refs для предотвращения дублирующих запросов
+  const authCheckRef = useRef(false);
+  const eventsLoadRef = useRef(false);
+
   // Загрузка событий
   const loadEvents = async () => {
+    // Предотвращаем дублирующие запросы
+    if (eventsLoadRef.current) {
+      console.log('Запрос loadEvents уже выполняется, пропускаем');
+      return;
+    }
+    
     try {
+      eventsLoadRef.current = true;
       setLoading(true);
+      
       const response = await axios.get('/api/events');
       setEvents(response.data.events);
     } catch (error) {
       console.error('Ошибка загрузки событий:', error);
     } finally {
       setLoading(false);
+      eventsLoadRef.current = false;
     }
   };
 
@@ -261,7 +274,15 @@ function App() {
   // Проверка авторизации при загрузке
   useEffect(() => {
     const checkAuth = async () => {
-    try {
+      // Предотвращаем дублирующие запросы
+      if (authCheckRef.current) {
+        console.log('Запрос checkAuth уже выполняется, пропускаем');
+        return;
+      }
+      
+      try {
+        authCheckRef.current = true;
+        
         const response = await axios.get('/api/auth/check');
         if (response.data.user) {
           setAuth({
@@ -269,7 +290,8 @@ function App() {
             user: response.data.user,
             isLoading: false
           });
-          loadEvents(); // Загружаем события после успешной авторизации
+          // Загружаем события только здесь, убираем дублирование
+          loadEvents();
         } else {
           setAuth({
             isAuthenticated: false,
@@ -284,18 +306,25 @@ function App() {
           user: null,
           isLoading: false
         });
+      } finally {
+        authCheckRef.current = false;
       }
     };
 
     checkAuth();
+
+    // Cleanup функция для отмены запросов при размонтировании
+    return () => {
+      // Cleanup не нужен, так как убрали AbortController
+    };
   }, []);
 
-  // Загрузка событий при изменении авторизации
-  useEffect(() => {
-    if (auth.isAuthenticated) {
-      loadEvents();
-    }
-  }, [auth.isAuthenticated]);
+  // Убираем дублирующий useEffect для загрузки событий
+  // useEffect(() => {
+  //   if (auth.isAuthenticated) {
+  //     loadEvents();
+  //   }
+  // }, [auth.isAuthenticated]);
 
   const handleLogin = (user: User) => {
     setAuth({
@@ -303,7 +332,8 @@ function App() {
       user,
       isLoading: false
     });
-    loadEvents(); // Загружаем события после успешного входа
+    // Загружаем события только здесь, убираем дублирование
+    loadEvents();
   };
 
   const handleLogout = async () => {

@@ -15,7 +15,7 @@ export interface AuthState {
 
 export interface PromoEvent {
   id: string;
-  project: string;
+  project: string; // оставляем для совместимости, не трогаем
   start_date: string;
   end_date: string;
   name: string;
@@ -27,8 +27,9 @@ export interface PromoEvent {
   info_channels: InfoChannel[];
 }
 
-export interface PromoEventCreate extends Omit<PromoEvent, 'id' | 'info_channels'> {
+export interface PromoEventCreate extends Omit<PromoEvent, 'id' | 'info_channels' | 'project'> {
   id?: string;
+  project: string[];
   info_channels: InfoChannelCreate[];
 }
 
@@ -78,7 +79,7 @@ export interface DisplayPromoEvent extends PromoEvent {
 
 export interface PromoEventFormData {
   id?: string;
-  project: string;
+  project: string[];
   start_date: string | null;
   end_date: string | null;
   name: string;

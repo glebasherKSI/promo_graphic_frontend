@@ -25,6 +25,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Предотвращаем множественные отправки
+    if (isLoading) {
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
 
