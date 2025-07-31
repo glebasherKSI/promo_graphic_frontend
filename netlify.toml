@@ -8,6 +8,6 @@
   status = 200
 
 [build.environment]
-  REACT_APP_API_URL = "https://promo-gb.duckdns.org/"
+  REACT_APP_API_URL = "https://promo-gb.duckdns.org"
   CI = "false"
   GENERATE_SOURCEMAP = "false"

@@ -200,7 +200,17 @@ const darkTheme = createTheme({
 
 // Настройка axios
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-axios.defaults.baseURL = API_URL;
+console.log('API_URL:', API_URL); // Для отладки
+console.log('NODE_ENV:', process.env.NODE_ENV); // Для отладки
+
+// В продакшене используем полный URL, в разработке - относительный
+if (process.env.NODE_ENV === 'production') {
+  axios.defaults.baseURL = API_URL;
+} else {
+  // В разработке используем proxy
+  axios.defaults.baseURL = '';
+}
+
 axios.defaults.headers.common['Content-Type'] = 'application/json';
 axios.defaults.withCredentials = true;
 
