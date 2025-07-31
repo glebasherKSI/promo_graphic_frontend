@@ -7,6 +7,13 @@ export interface User {
   role: 'admin' | 'user';
 }
 
+// Новый интерфейс для пользователей из API
+export interface ApiUser {
+  id: number;
+  login: string;
+  mail: string | null;
+}
+
 export interface AuthState {
   isAuthenticated: boolean;
   user: User | null;
@@ -25,12 +32,15 @@ export interface PromoEvent {
   segments: string;
   link: string;
   info_channels: InfoChannel[];
+  responsible_id?: number; // Добавляем поле для ответственного
+  responsible_name?: string; // Добавляем поле для имени ответственного
 }
 
 export interface PromoEventCreate extends Omit<PromoEvent, 'id' | 'info_channels' | 'project'> {
   id?: string;
   project: string[];
   info_channels: InfoChannelCreate[];
+  responsible_id?: number; // Добавляем поле для ответственного
 }
 
 export interface InfoChannel {
@@ -88,4 +98,5 @@ export interface PromoEventFormData {
   comment: string;
   segments: string;
   link: string;
+  responsible_id?: number; // Добавляем поле для ответственного
 } 

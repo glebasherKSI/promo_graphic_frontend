@@ -59,8 +59,8 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
     const cached = domCache.current.get(cacheKey);
     const now = Date.now();
     
-    // Кэш действителен 200мс
-    if (cached && (now - cached.timestamp) < 200) {
+    // Кэш действителен 100мс (уменьшаем время для более частого обновления)
+    if (cached && (now - cached.timestamp) < 100) {
       return cached;
     }
     
@@ -105,6 +105,16 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
     domCache.current.clear();
   }, [events, selectedMonth, selectedYear, collapsedPromoTypes, forcePositionUpdate]);
   
+  // Дополнительная очистка кэша при изменении событий (для обновления каналов)
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      domCache.current.clear();
+      setRenderKey(prev => prev + 1);
+    }, 50);
+    
+    return () => clearTimeout(timer);
+  }, [events]);
+  
   // Пересчитываем позиции после рендера таблицы и изменения состояния сворачивания
   React.useEffect(() => {
     const timer = setTimeout(() => {
@@ -114,6 +124,16 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
     
     return () => clearTimeout(timer);
   }, [events, selectedMonth, selectedYear]);
+  
+  // Принудительное обновление при изменении событий (для каналов)
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      domCache.current.clear();
+      setRenderKey(prev => prev + 1);
+    }, 150); // Увеличенная задержка для обновления каналов
+    
+    return () => clearTimeout(timer);
+  }, [events]);
 
   // Дополнительный пересчет при изменении состояния сворачивания (с учетом анимации)
   React.useEffect(() => {
@@ -136,6 +156,11 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
   // Рендерим полосы для каждого типа промо
   const renderEventBars = () => {
     const allBars: React.ReactNode[] = [];
+    
+    // Отладочная информация
+    const totalChannels = events.reduce((count, event) => 
+      count + (event.info_channels?.length || 0), 0);
+    console.log(`EventBarsLayer: Рендерим ${events.length} событий с ${totalChannels} каналами для проекта ${project}`);
 
     PROMO_TYPES.forEach((promoType, promoTypeIdx) => {
       // Проверяем, свернут ли этот тип промо
@@ -212,8 +237,8 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
     const startDay = visibleStart.date();
     const endDay = visibleEnd.date();
     
-    // Создаем ключ для кэша DOM данных
-    const cacheKey = `${project}-${event.promo_type}-${selectedMonth}-${selectedYear}-${renderKey}`;
+    // Создаем ключ для кэша DOM данных (добавляем ID события для уникальности)
+    const cacheKey = `${project}-${event.promo_type}-${selectedMonth}-${selectedYear}-${renderKey}-${event.id}`;
     
     // Получаем кэшированные DOM данные
     const domData = getCachedDOMData(cacheKey);
@@ -358,8 +383,22 @@ export default React.memo(EventBarsLayer, (prevProps, nextProps) => {
     return false;
   }
 
-  // Проверяем события - сравниваем по ключам
+  // Проверяем события - сравниваем по ключам и количеству
+  if (prevProps.events.length !== nextProps.events.length) {
+    return false;
+  }
+  
   if (!shallowCompareArrays(prevProps.events, nextProps.events, createEventKey)) {
+    return false;
+  }
+
+  // Дополнительная проверка для каналов информирования
+  const prevChannelsCount = prevProps.events.reduce((count, event) => 
+    count + (event.info_channels?.length || 0), 0);
+  const nextChannelsCount = nextProps.events.reduce((count, event) => 
+    count + (event.info_channels?.length || 0), 0);
+  
+  if (prevChannelsCount !== nextChannelsCount) {
     return false;
   }
 

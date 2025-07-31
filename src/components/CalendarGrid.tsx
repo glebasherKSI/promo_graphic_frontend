@@ -128,6 +128,15 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   // Состояние для принудительного обновления позиций полос
   const [forcePositionUpdate, setForcePositionUpdate] = useState(0);
   
+  // Принудительное обновление позиций при изменении событий
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setForcePositionUpdate(prev => prev + 1);
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, [events]);
+  
   // Ref для отслеживания выделенных ячеек без ререндера
   const selectedCellsRef = useRef<Set<string>>(new Set());
   const tableRef = useRef<HTMLTableElement>(null);
@@ -647,6 +656,17 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                 </Typography>
               </Box>
             )}
+
+            {promoEvent.responsible_name && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Ответственный
+                </Typography>
+                <Typography variant="body2">
+                  {promoEvent.responsible_name}
+                </Typography>
+              </Box>
+            )}
           </Stack>
         </Box>
       );
@@ -797,6 +817,8 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
         setIsDeleting(true);
         if (selectedEvent._channel) {
           await axios.delete(`/api/channels/${selectedEvent._channel.id}`);
+          // Добавляем небольшую задержку для обновления связанных данных на сервере
+          await new Promise(resolve => setTimeout(resolve, 100));
         } else {
           await axios.delete(`/api/events/${selectedEvent.id}`);
         }
@@ -1232,6 +1254,12 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
 
   const processedEvents = useMemo(() => {
     let allEvents: PromoEvent[] = [];
+    
+    // Отладочная информация о каналах
+    const totalChannels = events.reduce((count, event) => 
+      count + (event.info_channels?.length || 0), 0);
+    console.log(`CalendarGrid: Обрабатываем ${events.length} событий с ${totalChannels} каналами`);
+    
     for (const event of events) {
       // Проверяем валидность события перед обработкой
       if (!event || !event.start_date || !event.end_date) {

@@ -73,6 +73,11 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
   collapsedPromoTypes,
   togglePromoTypeCollapse
 }) => {
+  // Отладочная информация о каналах
+  const totalChannels = events.reduce((count, event) => 
+    count + (event.info_channels?.length || 0), 0);
+  console.log(`ProjectCalendarTable: Рендерим ${events.length} событий с ${totalChannels} каналами для проекта ${project}`);
+  
   return (
     <Table
       ref={tableRef}
@@ -464,7 +469,21 @@ export default React.memo(ProjectCalendarTable, (prevProps, nextProps) => {
   }
 
   // Проверяем события - сравниваем по ключам для оптимизации
+  if (prevProps.events.length !== nextProps.events.length) {
+    return false;
+  }
+  
   if (!shallowCompareArrays(prevProps.events, nextProps.events, createEventKey)) {
+    return false;
+  }
+  
+  // Дополнительная проверка для каналов информирования
+  const prevChannelsCount = prevProps.events.reduce((count, event) => 
+    count + (event.info_channels?.length || 0), 0);
+  const nextChannelsCount = nextProps.events.reduce((count, event) => 
+    count + (event.info_channels?.length || 0), 0);
+  
+  if (prevChannelsCount !== nextChannelsCount) {
     return false;
   }
 

@@ -22,7 +22,7 @@ import {
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import dayjs from '../utils/dayjs';
-import { PromoEvent, PromoEventCreate, PromoEventFormData, InfoChannel, InfoChannelCreate } from '../types';
+import { PromoEvent, PromoEventCreate, PromoEventFormData, InfoChannel, InfoChannelCreate, ApiUser } from '../types';
 import { PROMO_TYPES, PROMO_KINDS, CHANNEL_TYPES, ChannelType } from '../constants/promoTypes';
 
 interface EventDialogProps {
@@ -49,13 +49,40 @@ const EventDialog: React.FC<EventDialogProps> = ({
     segments: 'СНГ',
     start_date: null,
     end_date: null,
-    link: ''
+    link: '',
+    responsible_id: undefined
   });
 
   const [selectedChannelTypes, setSelectedChannelTypes] = useState<string[]>([]);
   const [channelData, setChannelData] = useState<{[key: string]: Partial<InfoChannel>}>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [users, setUsers] = useState<ApiUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+
+  // Загрузка пользователей при открытии диалога
+  useEffect(() => {
+    if (open) {
+      fetchUsers();
+    }
+  }, [open]);
+
+  const fetchUsers = async () => {
+    try {
+      setUsersLoading(true);
+      const response = await fetch('/api/users/list/brief');
+      if (!response.ok) {
+        throw new Error('Ошибка загрузки пользователей');
+      }
+      const usersData = await response.json();
+      setUsers(usersData);
+    } catch (error) {
+      console.error('Ошибка при загрузке пользователей:', error);
+      setError('Не удалось загрузить список пользователей');
+    } finally {
+      setUsersLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (event) {
@@ -69,7 +96,8 @@ const EventDialog: React.FC<EventDialogProps> = ({
         segments: event.segments,
         start_date: event.start_date,
         end_date: event.end_date,
-        link: event.link || ''
+        link: event.link || '',
+        responsible_id: event.responsible_id
       });
 
       // Инициализация каналов информирования
@@ -101,7 +129,8 @@ const EventDialog: React.FC<EventDialogProps> = ({
         segments: 'СНГ',
         start_date: null,
         end_date: null,
-        link: ''
+        link: '',
+        responsible_id: undefined
       });
       setSelectedChannelTypes([]);
       setChannelData({});
@@ -180,10 +209,13 @@ const EventDialog: React.FC<EventDialogProps> = ({
         start_date: formData.start_date || dayjs.utc().format('YYYY-MM-DDTHH:mm:ss'),
         end_date: formData.end_date || dayjs.utc().add(1, 'day').format('YYYY-MM-DDTHH:mm:ss'),
         link: formData.link || '',
-        info_channels: channelsArray
+        info_channels: channelsArray,
+        responsible_id: formData.responsible_id
       };
 
       await onSave(eventData);
+      // Добавляем небольшую задержку для обновления UI
+      await new Promise(resolve => setTimeout(resolve, 50));
       onClose();
     } catch (err) {
       console.error('Ошибка при сохранении:', err);
@@ -307,6 +339,38 @@ const EventDialog: React.FC<EventDialogProps> = ({
             </Select>
             <Typography variant="caption" color="textSecondary">Можно выбрать несколько проектов</Typography>
           </FormControl>
+
+                      {/* Ответственный */}
+            <FormControl fullWidth>
+              <InputLabel>Ответственный</InputLabel>
+              <Select
+                value={formData.responsible_id || ''}
+                onChange={(e) => handleChange('responsible_id', e.target.value)}
+                disabled={usersLoading}
+              >
+                <MenuItem value="">
+                  <em>Не выбран</em>
+                </MenuItem>
+                {users.map(user => (
+                  <MenuItem key={user.id} value={user.id}>
+                    {user.login}
+                  </MenuItem>
+                ))}
+              </Select>
+              {usersLoading && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                  <CircularProgress size={16} />
+                  <Typography variant="caption" color="textSecondary">
+                    Загрузка пользователей...
+                  </Typography>
+                </Box>
+              )}
+              {event?.responsible_name && !formData.responsible_id && (
+                <Typography variant="caption" color="textSecondary" sx={{ mt: 1 }}>
+                  Текущий ответственный: {event.responsible_name}
+                </Typography>
+              )}
+            </FormControl>
 
           {/* Тип промо */}
           <FormControl fullWidth>

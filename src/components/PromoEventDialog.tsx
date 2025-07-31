@@ -26,7 +26,7 @@ import {
   ListItemText
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
-import { PromoEvent, PromoEventCreate, PromoEventFormData, InfoChannel, InfoChannelCreate } from '../types';
+import { PromoEvent, PromoEventCreate, PromoEventFormData, InfoChannel, InfoChannelCreate, ApiUser } from '../types';
 import { PROMO_TYPES, PROMO_KINDS, CHANNEL_TYPES, ChannelType } from '../constants/promoTypes';
 import dayjs from '../utils/dayjs';
 import AddIcon from '@mui/icons-material/Add';
@@ -54,6 +54,7 @@ interface PromoEventDialogFormData {
   comment: string;
   segments: string;
   link: string;
+  responsible_id?: number;
 }
 
 const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
@@ -73,7 +74,8 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
     segments: 'СНГ',
     start_date: '',
     end_date: '',
-    link: ''
+    link: '',
+    responsible_id: undefined
   });
 
   const [infoChannels, setInfoChannels] = useState<InfoChannelCreate[]>([]);
@@ -85,6 +87,32 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
 
   const [selectedChannelTypes, setSelectedChannelTypes] = useState<string[]>([]);
   const [channelData, setChannelData] = useState<{[key: string]: Partial<InfoChannel>}>({});
+  const [users, setUsers] = useState<ApiUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+
+  // Загрузка пользователей при открытии диалога
+  useEffect(() => {
+    if (open) {
+      fetchUsers();
+    }
+  }, [open]);
+
+  const fetchUsers = async () => {
+    try {
+      setUsersLoading(true);
+      const response = await fetch('/api/users/list/brief');
+      if (!response.ok) {
+        throw new Error('Ошибка загрузки пользователей');
+      }
+      const usersData = await response.json();
+      setUsers(usersData);
+    } catch (error) {
+      console.error('Ошибка при загрузке пользователей:', error);
+      setError('Не удалось загрузить список пользователей');
+    } finally {
+      setUsersLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (event) {
@@ -98,7 +126,8 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
         segments: event.segments,
         start_date: dayjs.utc(event.start_date).format('YYYY-MM-DDTHH:mm:ss'),
         end_date: dayjs.utc(event.end_date).format('YYYY-MM-DDTHH:mm:ss'),
-        link: event.link || ''
+        link: event.link || '',
+        responsible_id: event.responsible_id
       });
 
       // Инициализация каналов информирования
@@ -130,7 +159,8 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
         segments: 'СНГ',
         start_date: '',
         end_date: '',
-        link: ''
+        link: '',
+        responsible_id: undefined
       });
       setSelectedChannelTypes([]);
       setChannelData({});
@@ -255,14 +285,17 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
         start_date: formData.start_date || dayjs.utc().format('YYYY-MM-DDTHH:mm:ss'),
         end_date: formData.end_date || dayjs.utc().add(1, 'day').format('YYYY-MM-DDTHH:mm:ss'),
         link: formData.link || '',
-        info_channels: channelsArray
+        info_channels: channelsArray,
+        responsible_id: formData.responsible_id
       };
 
       await onSave(eventData);
       setSuccessMessage(true);
+      // Добавляем небольшую задержку для обновления UI
+      await new Promise(resolve => setTimeout(resolve, 50));
+      onClose();
       setTimeout(() => {
         setSuccessMessage(false);
-        onClose();
       }, 1500);
     } catch (err: any) {
       console.error('Ошибка при сохранении:', err);
@@ -295,8 +328,11 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
       await onDelete(event.id);
       setSuccessMessage(true);
       setDeleteConfirmOpen(false);
+      // Добавляем небольшую задержку для обновления UI
+      await new Promise(resolve => setTimeout(resolve, 50));
+      onClose();
       setTimeout(() => {
-        onClose();
+        setSuccessMessage(false);
       }, 1000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Произошла ошибка при удалении');
@@ -371,6 +407,38 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
                   <MenuItem key={project} value={project}>{project}</MenuItem>
                 ))}
               </Select>
+            </FormControl>
+
+            {/* Ответственный */}
+            <FormControl fullWidth>
+              <InputLabel>Ответственный</InputLabel>
+              <Select
+                value={formData.responsible_id || ''}
+                onChange={(e) => handleChange('responsible_id', e.target.value)}
+                disabled={usersLoading}
+              >
+                <MenuItem value="">
+                  <em>Не выбран</em>
+                </MenuItem>
+                {users.map(user => (
+                  <MenuItem key={user.id} value={user.id}>
+                    {user.login}
+                  </MenuItem>
+                ))}
+              </Select>
+              {usersLoading && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                  <CircularProgress size={16} />
+                  <Typography variant="caption" color="textSecondary">
+                    Загрузка пользователей...
+                  </Typography>
+                </Box>
+              )}
+              {event?.responsible_name && !formData.responsible_id && (
+                <Typography variant="caption" color="textSecondary" sx={{ mt: 1 }}>
+                  Текущий ответственный: {event.responsible_name}
+                </Typography>
+              )}
             </FormControl>
 
             {/* Тип промо */}
@@ -496,8 +564,6 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
                 Информирование
               </Typography>
             </Box>
-
-
 
             {/* Существующие каналы информирования (только для чтения) */}
             {event && event.info_channels && event.info_channels.length > 0 && (

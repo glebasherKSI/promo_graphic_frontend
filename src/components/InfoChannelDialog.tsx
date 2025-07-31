@@ -126,6 +126,8 @@ const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
 
       console.log('Отправляемые данные канала:', channelData);
       await onSave(channelData);
+      // Добавляем небольшую задержку для обновления UI
+      await new Promise(resolve => setTimeout(resolve, 50));
       onClose();
     } catch (err) {
       console.error('Ошибка при сохранении канала:', err);

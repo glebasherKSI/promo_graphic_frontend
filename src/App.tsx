@@ -257,6 +257,10 @@ function App() {
       setLoading(true);
       
       const response = await axios.get('/api/events');
+      console.log('App: Загружено событий:', response.data.events.length);
+      const totalChannels = response.data.events.reduce((count: number, event: any) => 
+        count + (event.info_channels?.length || 0), 0);
+      console.log('App: Общее количество каналов:', totalChannels);
       setEvents(response.data.events);
     } catch (error) {
       console.error('Ошибка загрузки событий:', error);
@@ -421,6 +425,8 @@ function App() {
       }
       
       if (response.status === 200 || response.status === 201) {
+        // Добавляем небольшую задержку для обновления связанных данных на сервере
+        await new Promise(resolve => setTimeout(resolve, 100));
         await loadEvents();
         if (editingEvent) {
           handleEditDialogClose();
@@ -450,6 +456,9 @@ function App() {
       }
       
       if (response.status === 200 || response.status === 201) {
+        console.log('App: Канал успешно сохранен, обновляем данные...');
+        // Добавляем небольшую задержку для обновления связанных данных на сервере
+        await new Promise(resolve => setTimeout(resolve, 100));
         await loadEvents();
         handleChannelDialogClose();
       }
@@ -481,6 +490,8 @@ function App() {
     try {
       const response = await axios.delete(`/api/events/${eventId}`);
       if (response.status === 200) {
+        // Добавляем небольшую задержку для обновления связанных данных на сервере
+        await new Promise(resolve => setTimeout(resolve, 100));
         await loadEvents();
       }
     } catch (error) {
