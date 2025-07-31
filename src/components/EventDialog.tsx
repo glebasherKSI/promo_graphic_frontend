@@ -24,6 +24,7 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import dayjs from '../utils/dayjs';
 import { PromoEvent, PromoEventCreate, PromoEventFormData, InfoChannel, InfoChannelCreate, ApiUser } from '../types';
 import { PROMO_TYPES, PROMO_KINDS, CHANNEL_TYPES, ChannelType } from '../constants/promoTypes';
+import axios from 'axios';
 
 interface EventDialogProps {
   open: boolean;
@@ -70,12 +71,8 @@ const EventDialog: React.FC<EventDialogProps> = ({
   const fetchUsers = async () => {
     try {
       setUsersLoading(true);
-      const response = await fetch('/api/users/list/brief');
-      if (!response.ok) {
-        throw new Error('Ошибка загрузки пользователей');
-      }
-      const usersData = await response.json();
-      setUsers(usersData);
+      const response = await axios.get('/api/users/list/brief');
+      setUsers(response.data);
     } catch (error) {
       console.error('Ошибка при загрузке пользователей:', error);
       setError('Не удалось загрузить список пользователей');

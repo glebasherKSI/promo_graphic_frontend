@@ -34,6 +34,7 @@ import GeoDepositFields from '../components/GeoDepositFields';
 import InfoFields from '../components/InfoFields';
 import NoDepositFields from '../components/NoDepositFields';
 import PromoCheckboxes from '../components/PromoCheckboxes';
+import axios from 'axios';
 
 interface TaskResponse {
   success: boolean;
@@ -110,22 +111,15 @@ const Tasks: React.FC = () => {
 
       console.log('Отправляем данные на бэкенд:', taskData);
       
-      const response = await fetch('/api/promo-fields/geodep', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(taskData)
-      });
-      
-      if (response.ok) {
-        const result: TaskResponse = await response.json();
+      try {
+        const response = await axios.post('/api/promo-fields/geodep', taskData);
+        const result: TaskResponse = response.data;
         console.log('Задача успешно создана:', result);
         setTaskResponse(result);
         setModalOpen(true);
-      } else {
-        const errorData = await response.json();
-        console.error('Ошибка при создании задачи:', errorData);
+      } catch (error: any) {
+        console.error('Ошибка при создании задачи:', error);
+        const errorData = error.response?.data || {};
         setTaskResponse({
           success: false,
           error: errorData.error || 'Ошибка при создании задачи',

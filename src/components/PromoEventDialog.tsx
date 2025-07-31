@@ -32,6 +32,7 @@ import dayjs from '../utils/dayjs';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import axios from 'axios';
 
 interface PromoEventDialogProps {
   open: boolean;
@@ -100,12 +101,8 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
   const fetchUsers = async () => {
     try {
       setUsersLoading(true);
-      const response = await fetch('/api/users/list/brief');
-      if (!response.ok) {
-        throw new Error('Ошибка загрузки пользователей');
-      }
-      const usersData = await response.json();
-      setUsers(usersData);
+      const response = await axios.get('/api/users/list/brief');
+      setUsers(response.data);
     } catch (error) {
       console.error('Ошибка при загрузке пользователей:', error);
       setError('Не удалось загрузить список пользователей');
