@@ -69,9 +69,35 @@ export function shallowCompareArrays<T>(
 ): boolean {
   if (arr1.length !== arr2.length) return false;
   
-  for (let i = 0; i < arr1.length; i++) {
-    if (keyFn(arr1[i]) !== keyFn(arr2[i])) {
-      return false;
+  // Оптимизация: сравниваем только первые и последние элементы для больших массивов
+  if (arr1.length > 10) {
+    // Проверяем первые 3 элемента
+    for (let i = 0; i < Math.min(3, arr1.length); i++) {
+      if (keyFn(arr1[i]) !== keyFn(arr2[i])) {
+        return false;
+      }
+    }
+    
+    // Проверяем последние 3 элемента
+    for (let i = Math.max(0, arr1.length - 3); i < arr1.length; i++) {
+      if (keyFn(arr1[i]) !== keyFn(arr2[i])) {
+        return false;
+      }
+    }
+    
+    // Проверяем средние элементы с шагом
+    const step = Math.max(1, Math.floor(arr1.length / 10));
+    for (let i = 3; i < arr1.length - 3; i += step) {
+      if (keyFn(arr1[i]) !== keyFn(arr2[i])) {
+        return false;
+      }
+    }
+  } else {
+    // Для небольших массивов проверяем все элементы
+    for (let i = 0; i < arr1.length; i++) {
+      if (keyFn(arr1[i]) !== keyFn(arr2[i])) {
+        return false;
+      }
     }
   }
   

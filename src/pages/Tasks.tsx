@@ -27,13 +27,13 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs, { Dayjs } from 'dayjs';
 import { TASK_PROMO_TYPES, TASK_PROJECTS, TASK_NAME_MAPPING } from '../constants/promoTypes';
-import TournamentFields from '../components/TournamentFields';
-import ActionFields from '../components/ActionFields';
-import SngDepositFields from '../components/DepositFields';
-import GeoDepositFields from '../components/GeoDepositFields';
-import InfoFields from '../components/InfoFields';
-import NoDepositFields from '../components/NoDepositFields';
-import PromoCheckboxes from '../components/PromoCheckboxes';
+import TournamentFields from '../components/createTasks/TournamentFields';
+import ActionFields from '../components/createTasks/ActionFields';
+import SngDepositFields from '../components/createTasks/DepositFields';
+import GeoDepositFields from '../components/createTasks/GeoDepositFields';
+import InfoFields from '../components/general/InfoFields';
+import NoDepositFields from '../components/createTasks/NoDepositFields';
+import PromoCheckboxes from '../components/createTasks/PromoCheckboxes';
 import axios from 'axios';
 
 interface TaskResponse {

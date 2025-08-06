@@ -15,16 +15,14 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import 'dayjs/locale/ru';
-import Navigation from './components/Navigation';
+import Navigation from './components/general/Navigation';
 import Calendar from './pages/Calendar';
 import Tasks from './pages/Tasks';
-import { LoginForm } from './components/LoginForm';
+import { LoginForm } from './components/general/LoginForm';
 import { AuthState, User, PromoEvent, PromoEventCreate, InfoChannel } from './types';
 import axios from 'axios';
-import EventDialog from './components/EventDialog';
-import PromoEventDialog from './components/PromoEventDialog';
-import InfoChannelDialog from './components/InfoChannelDialog';
-import ProfileEditDialog from './components/ProfileEditDialog';
+import { EventDialog, PromoEventDialog, InfoChannelDialog } from './components/promoCalendar';
+import ProfileEditDialog from './components/general/ProfileEditDialog';
 import { CHANNEL_TYPES } from './constants/promoTypes';
 import dayjs from 'dayjs';
 
@@ -255,7 +253,7 @@ function App() {
   const eventsLoadRef = useRef(false);
 
   // Загрузка событий
-  const loadEvents = async () => {
+  const loadEvents = async (month?: number, year?: number) => {
     // Предотвращаем дублирующие запросы
     if (eventsLoadRef.current) {
       console.log('Запрос loadEvents уже выполняется, пропускаем');
@@ -266,7 +264,14 @@ function App() {
       eventsLoadRef.current = true;
       setLoading(true);
       
-      const response = await axios.get('/api/events');
+      // Используем переданные параметры или текущие значения состояния
+      const targetMonth = month ?? selectedMonth;
+      const targetYear = year ?? selectedYear;
+      
+      // Форматируем месяц в формат YYYY-MM
+      const monthStr = `${targetYear}-${targetMonth.toString().padStart(2, '0')}`;
+      
+      const response = await axios.get(`/api/events?month=${monthStr}`);
       console.log('App: Загружено событий:', response.data.events.length);
       const totalChannels = response.data.events.reduce((count: number, event: any) => 
         count + (event.info_channels?.length || 0), 0);
@@ -333,12 +338,12 @@ function App() {
     };
   }, []);
 
-  // Убираем дублирующий useEffect для загрузки событий
-  // useEffect(() => {
-  //   if (auth.isAuthenticated) {
-  //     loadEvents();
-  //   }
-  // }, [auth.isAuthenticated]);
+  // Загружаем события при изменении месяца или года
+  useEffect(() => {
+    if (auth.isAuthenticated) {
+      loadEvents();
+    }
+  }, [selectedMonth, selectedYear, auth.isAuthenticated]);
 
   const handleLogin = (user: User) => {
     setAuth({

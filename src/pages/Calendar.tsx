@@ -20,8 +20,8 @@ import {
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers';
 import dayjs from '../utils/dayjs';
-import CalendarGrid from '../components/CalendarGrid';
-import ColorLegend from '../components/ColorLegend';
+import { CalendarGrid } from '../components/promoCalendar';
+import ColorLegend from '../components/general/ColorLegend';
 import { PromoEvent, InfoChannel, AuthState } from '../types';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -82,6 +82,12 @@ const Calendar: React.FC<CalendarProps> = ({
     ) {
       return true;
     }
+    
+    // Проверяем, что событие принадлежит выбранным проектам
+    if (!selectedProjects.includes(event.project)) {
+      return false;
+    }
+    
     const eventStartDate = dayjs(event.start_date);
     const eventEndDate = dayjs(event.end_date);
     const startOfMonth = dayjs().year(selectedYear).month(selectedMonth - 1).startOf('month');
@@ -89,15 +95,13 @@ const Calendar: React.FC<CalendarProps> = ({
 
     // Проверяем попадает ли само событие в месяц
     const eventInMonth = (
-      selectedProjects.includes(event.project) &&
-      ((eventStartDate.isSameOrBefore(endOfMonth) && eventEndDate.isSameOrAfter(startOfMonth)) ||
-        (eventStartDate.isSameOrBefore(endOfMonth) && eventStartDate.isSameOrAfter(startOfMonth)) ||
-        (eventEndDate.isSameOrBefore(endOfMonth) && eventEndDate.isSameOrAfter(startOfMonth)))
+      (eventStartDate.isSameOrBefore(endOfMonth) && eventEndDate.isSameOrAfter(startOfMonth)) ||
+      (eventStartDate.isSameOrBefore(endOfMonth) && eventStartDate.isSameOrAfter(startOfMonth)) ||
+      (eventEndDate.isSameOrBefore(endOfMonth) && eventEndDate.isSameOrAfter(startOfMonth))
     );
 
     // Проверяем есть ли каналы информирования в текущем месяце
-    const hasChannelsInMonth = selectedProjects.includes(event.project) &&
-      event.info_channels && 
+    const hasChannelsInMonth = event.info_channels && 
       event.info_channels.some(channel => {
         const channelDate = dayjs(channel.start_date);
         return channelDate.isBetween(startOfMonth, endOfMonth, 'day', '[]');
@@ -237,7 +241,7 @@ const Calendar: React.FC<CalendarProps> = ({
 
           <Button
             variant="contained"
-            onClick={loadEvents}
+            onClick={() => loadEvents()}
             disabled={loading}
             startIcon={loading ? <CircularProgress size={20} /> : null}
           >
