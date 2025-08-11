@@ -212,6 +212,64 @@ if (process.env.NODE_ENV === 'production') {
 axios.defaults.headers.common['Content-Type'] = 'application/json';
 axios.defaults.withCredentials = true;
 
+// Функции для управления токенами
+const setAuthToken = (token: string) => {
+  if (token) {
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    localStorage.setItem('access_token', token);
+  } else {
+    delete axios.defaults.headers.common['Authorization'];
+    localStorage.removeItem('access_token');
+  }
+};
+
+const getStoredToken = () => {
+  return localStorage.getItem('access_token');
+};
+
+const isTokenExpired = () => {
+  const expires = localStorage.getItem('token_expires');
+  if (!expires) return true;
+  return Date.now() > parseInt(expires);
+};
+
+// Перехватчик для автоматического обновления токена
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      // Токен истек, пытаемся обновить
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (refreshToken) {
+        try {
+          const response = await axios.post('/api/auth/refresh', {
+            refresh_token: refreshToken
+          });
+          
+          if (response.data.access_token) {
+            setAuthToken(response.data.access_token);
+            localStorage.setItem('token_expires', (Date.now() + response.data.expires_in * 1000).toString());
+            
+            // Повторяем оригинальный запрос с новым токеном
+            error.config.headers['Authorization'] = `Bearer ${response.data.access_token}`;
+            return axios(error.config);
+          }
+        } catch (refreshError) {
+          console.error('Ошибка обновления токена:', refreshError);
+          // При ошибке обновления очищаем все токены
+          setAuthToken('');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('token_expires');
+          
+          // Перенаправляем на страницу входа
+          window.location.reload();
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Константы
 export const PROJECTS = ['ROX', 'FRESH', 'SOL', 'JET', 'IZZI', 'VOLNA', 'Legzo', 'STARDA', 'DRIP', 'Monro', '1GO', 'LEX', 'Gizbo', 'Irwin', 'FLAGMAN', 'MARTIN'];
 
@@ -239,8 +297,8 @@ function App() {
     type: string;
     start_date: string;
   } | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState(6);
-  const [selectedYear, setSelectedYear] = useState(2025);
+  const [selectedMonth, setSelectedMonth] = useState(dayjs().month() + 1);
+  const [selectedYear, setSelectedYear] = useState(dayjs().year());
   const [selectedProjects, setSelectedProjects] = useState(PROJECTS);
   const [auth, setAuth] = useState<AuthState>({
     isAuthenticated: false,
@@ -255,6 +313,13 @@ function App() {
   // Загрузка событий
   const loadEvents = async (month?: number, year?: number) => {
     try {
+      // Предотвращаем параллельные запросы
+      if (eventsLoadRef.current) {
+        console.log('loadEvents уже выполняется, пропускаем');
+        return;
+      }
+      eventsLoadRef.current = true;
+
       setLoading(true);
       const currentMonth = month || selectedMonth;
       const currentYear = year || selectedYear;
@@ -275,12 +340,12 @@ function App() {
       });
       
       setEvents(response.data.events);
-      setSelectedMonth(currentMonth);
-      setSelectedYear(currentYear);
+      // Не меняем selectedMonth/selectedYear здесь, чтобы не триггерить лишние перезагрузки
     } catch (error) {
       console.error('Ошибка при загрузке событий:', error);
     } finally {
       setLoading(false);
+      eventsLoadRef.current = false;
     }
   };
 
@@ -301,16 +366,32 @@ function App() {
       try {
         authCheckRef.current = true;
         
-        const response = await axios.get('/api/auth/check');
-        if (response.data.user) {
-          setAuth({
-            isAuthenticated: true,
-            user: response.data.user,
-            isLoading: false
-          });
-          // Загружаем события только здесь, убираем дублирование
-          loadEvents();
+        // Проверяем, есть ли сохраненный токен
+        const storedToken = getStoredToken();
+        if (storedToken && !isTokenExpired()) {
+          // Устанавливаем токен в заголовки
+          setAuthToken(storedToken);
+          
+          // Проверяем валидность токена
+          const response = await axios.get('/api/auth/check');
+          if (response.data.user) {
+            setAuth({
+              isAuthenticated: true,
+              user: response.data.user,
+              isLoading: false
+            });
+          } else {
+            // Токен недействителен, очищаем
+            setAuthToken('');
+            setAuth({
+              isAuthenticated: false,
+              user: null,
+              isLoading: false
+            });
+          }
         } else {
+          // Токена нет или он истек, очищаем
+          setAuthToken('');
           setAuth({
             isAuthenticated: false,
             user: null,
@@ -319,6 +400,8 @@ function App() {
         }
       } catch (error) {
         console.error('Ошибка проверки авторизации:', error);
+        // При ошибке очищаем токен
+        setAuthToken('');
         setAuth({
           isAuthenticated: false,
           user: null,
@@ -344,26 +427,33 @@ function App() {
     }
   }, [selectedMonth, selectedYear, auth.isAuthenticated]);
 
-  const handleLogin = (user: User) => {
+  const handleLogin = (user: User, tokens: { access_token: string; refresh_token: string; expires_in: number }) => {
+    // Устанавливаем токен в заголовки axios
+    setAuthToken(tokens.access_token);
+    
     setAuth({
       isAuthenticated: true,
       user,
       isLoading: false
     });
-    // Загружаем события только здесь, убираем дублирование
-    loadEvents();
   };
 
   const handleLogout = async () => {
     try {
       await axios.post('/api/auth/logout');
+    } catch (error) {
+      console.error('Ошибка при выходе:', error);
+    } finally {
+      // Очищаем токены и состояние авторизации
+      setAuthToken('');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('token_expires');
+      
       setAuth({
         isAuthenticated: false,
         user: null,
         isLoading: false
       });
-    } catch (error) {
-      console.error('Ошибка при выходе:', error);
     }
   };
 

@@ -14,7 +14,7 @@ import axios from 'axios';
 import { User } from '../../types';
 
 interface LoginFormProps {
-  onLogin: (user: User) => void;
+  onLogin: (user: User, tokens: { access_token: string; refresh_token: string; expires_in: number }) => void;
 }
 
 export const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
@@ -46,8 +46,18 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
         withCredentials: true
       });
 
-      if (response.data.user) {
-        onLogin(response.data.user);
+      if (response.data.user && response.data.access_token) {
+        // Сохраняем токены в localStorage
+        localStorage.setItem('access_token', response.data.access_token);
+        localStorage.setItem('refresh_token', response.data.refresh_token);
+        localStorage.setItem('token_expires', (Date.now() + response.data.expires_in * 1000).toString());
+        
+        // Передаем пользователя и токены в родительский компонент
+        onLogin(response.data.user, {
+          access_token: response.data.access_token,
+          refresh_token: response.data.refresh_token,
+          expires_in: response.data.expires_in
+        });
       } else {
         setError('Неверный ответ от сервера');
       }

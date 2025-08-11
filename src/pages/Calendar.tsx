@@ -65,10 +65,10 @@ const Calendar: React.FC<CalendarProps> = ({
   handleEventCreate,
   handleChannelCreate
 }) => {
-  // Инициализируем текущую дату при монтировании компонента
+  // Инициализируем текущую дату при монтировании компонента (один раз)
   useEffect(() => {
     const now = dayjs();
-    setSelectedMonth(now.month() + 1); // dayjs возвращает месяц от 0 до 11
+    setSelectedMonth(now.month() + 1);
     setSelectedYear(now.year());
   }, []);
 
