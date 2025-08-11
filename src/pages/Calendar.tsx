@@ -74,15 +74,6 @@ const Calendar: React.FC<CalendarProps> = ({
 
   // Фильтрация событий по выбранным проектам и месяцу
   const filteredEvents = events.filter(event => {
-    // Для регулярных турниров и кешбэка всегда возвращаем true
-    
-    if (
-      (event.promo_type === 'Турниры' && event.promo_kind === 'Регулярные') ||
-      event.promo_type === 'Кэшбек'
-    ) {
-      return true;
-    }
-    
     // Проверяем, что событие принадлежит выбранным проектам
     if (!selectedProjects.includes(event.project)) {
       return false;

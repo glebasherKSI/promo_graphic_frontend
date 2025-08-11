@@ -18,12 +18,14 @@ import {
   Checkbox,
   ListItemText,
   Divider,
-  CircularProgress
+  CircularProgress,
+  Paper
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import dayjs from '../../utils/dayjs';
 import { PromoEvent, PromoEventCreate, PromoEventFormData, InfoChannel, InfoChannelCreate, ApiUser } from '../../types';
 import { PROMO_TYPES, PROMO_KINDS, CHANNEL_TYPES, ChannelType } from '../../constants/promoTypes';
+import WarningIcon from '@mui/icons-material/Warning';
 import axios from 'axios';
 
 interface EventDialogProps {
@@ -300,6 +302,26 @@ const EventDialog: React.FC<EventDialogProps> = ({
       </DialogTitle>
       
       <DialogContent>
+        {/* Предупреждение для рекуррентных событий */}
+        {event?.is_recurring && (
+          <Paper 
+            sx={{ 
+              p: 2, 
+              mb: 2, 
+              backgroundColor: 'warning.light', 
+              color: 'warning.contrastText',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
+            }}
+          >
+            <WarningIcon />
+            <Typography variant="body2">
+              Это рекуррентное событие. Его нельзя редактировать.
+            </Typography>
+          </Paper>
+        )}
+        
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
           {/* ID */}
           {event?.id && (
@@ -319,6 +341,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
               value={formData.project}
               onChange={e => handleChange('project', typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}
               required
+              disabled={event?.is_recurring}
               renderValue={(selected) => (
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                   {(selected as string[]).map((value) => (
@@ -343,7 +366,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
               <Select
                 value={formData.responsible_id || ''}
                 onChange={(e) => handleChange('responsible_id', e.target.value)}
-                disabled={usersLoading}
+                disabled={usersLoading || event?.is_recurring}
               >
                 <MenuItem value="">
                   <em>Не выбран</em>
@@ -376,6 +399,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
               value={formData.promo_type || ''}
               onChange={(e) => handleChange('promo_type', e.target.value)}
               required
+              disabled={event?.is_recurring}
             >
               {PROMO_TYPES.map(type => (
                 <MenuItem key={type} value={type}>{type}</MenuItem>
@@ -390,6 +414,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
               <Select
                 value={formData.promo_kind || ''}
                 onChange={(e) => handleChange('promo_kind', e.target.value)}
+                disabled={event?.is_recurring}
               >
                 {getAvailableKinds(formData.promo_type).map(kind => (
                   <MenuItem key={kind} value={kind}>{kind}</MenuItem>
@@ -405,6 +430,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
             value={formData.name || ''}
             onChange={(e) => handleChange('name', e.target.value)}
             required
+            disabled={event?.is_recurring}
           />
 
           {/* Комментарий */}
@@ -415,6 +441,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
             onChange={(e) => handleChange('comment', e.target.value)}
             multiline
             rows={4}
+            disabled={event?.is_recurring}
           />
 
           {/* Сегменты */}
@@ -424,6 +451,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
             value={Array.isArray(formData.segments) ? formData.segments.join(', ') : formData.segments || ''}
             onChange={(e) => handleChange('segments', e.target.value)}
             helperText="Введите сегменты через запятую"
+            disabled={event?.is_recurring}
           />
 
           {/* Даты */}
@@ -432,6 +460,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
               label="Дата начала "
               value={formData.start_date ? dayjs(formData.start_date) : null}
               onChange={(value) => handleChange('start_date', value ? value.format('YYYY-MM-DDTHH:mm:ss') : null)}
+              disabled={event?.is_recurring}
               slotProps={{
                 textField: {
                   fullWidth: true,
@@ -443,6 +472,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
               label="Дата окончания "
               value={formData.end_date ? dayjs(formData.end_date) : null}
               onChange={(value) => handleChange('end_date', value ? value.format('YYYY-MM-DDTHH:mm:ss') : null)}
+              disabled={event?.is_recurring}
               slotProps={{
                 textField: {
                   fullWidth: true,
@@ -458,6 +488,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
             label="Ссылка"
             value={formData.link || ''}
             onChange={(e) => handleChange('link', e.target.value)}
+            disabled={event?.is_recurring}
           />
 
           <Divider sx={{ my: 2 }} />
@@ -475,6 +506,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
               value={selectedChannelTypes}
               onChange={handleChannelTypesChange}
               input={<OutlinedInput label="Типы информирования" />}
+              disabled={event?.is_recurring}
               renderValue={(selected) => (
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                   {selected.map((value) => (
@@ -513,6 +545,7 @@ const EventDialog: React.FC<EventDialogProps> = ({
                       label="Дата старта"
                       value={channelData[type]?.start_date ? dayjs(channelData[type].start_date) : null}
                       onChange={(date) => handleChannelDataChange(type, 'start_date', date?.format('YYYY-MM-DDTHH:mm:ss'))}
+                      disabled={event?.is_recurring}
                       slotProps={{ textField: { size: 'small', fullWidth: true } }}
                     />
                   </Stack>
@@ -534,13 +567,16 @@ const EventDialog: React.FC<EventDialogProps> = ({
         <Button onClick={onClose} color="secondary" disabled={loading}>
           Отмена
         </Button>
-        <Button 
-          onClick={handleSubmit} 
-          variant="contained" 
-          disabled={loading}
-        >
-          {loading ? <CircularProgress size={24} /> : 'Сохранить'}
-        </Button>
+        {/* Кнопка сохранения - скрываем для рекуррентных событий */}
+        {!event?.is_recurring && (
+          <Button 
+            onClick={handleSubmit} 
+            variant="contained" 
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Сохранить'}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );

@@ -34,6 +34,8 @@ export interface PromoEvent {
   info_channels: InfoChannel[];
   responsible_id?: number; // Добавляем поле для ответственного
   responsible_name?: string; // Добавляем поле для имени ответственного
+  is_recurring?: boolean; // Добавляем поле для рекуррентных событий
+  occurrence_id?: number; // Добавляем поле для ID вхождения рекуррентного события
 }
 
 export interface PromoEventCreate extends Omit<PromoEvent, 'id' | 'info_channels' | 'project'> {

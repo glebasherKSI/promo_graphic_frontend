@@ -254,34 +254,33 @@ function App() {
 
   // Загрузка событий
   const loadEvents = async (month?: number, year?: number) => {
-    // Предотвращаем дублирующие запросы
-    if (eventsLoadRef.current) {
-      console.log('Запрос loadEvents уже выполняется, пропускаем');
-      return;
-    }
-    
     try {
-      eventsLoadRef.current = true;
       setLoading(true);
+      const currentMonth = month || selectedMonth;
+      const currentYear = year || selectedYear;
       
-      // Используем переданные параметры или текущие значения состояния
-      const targetMonth = month ?? selectedMonth;
-      const targetYear = year ?? selectedYear;
+      const response = await axios.get(`/api/events?month=${currentYear}-${String(currentMonth).padStart(2, '0')}`);
       
-      // Форматируем месяц в формат YYYY-MM
-      const monthStr = `${targetYear}-${targetMonth.toString().padStart(2, '0')}`;
+      console.log('🔍 loadEvents - Загруженные события:', response.data.events);
       
-      const response = await axios.get(`/api/events?month=${monthStr}`);
-      console.log('App: Загружено событий:', response.data.events.length);
-      const totalChannels = response.data.events.reduce((count: number, event: any) => 
-        count + (event.info_channels?.length || 0), 0);
-      console.log('App: Общее количество каналов:', totalChannels);
+      // Логируем структуру каждого события для отладки
+      response.data.events.forEach((event: PromoEvent, index: number) => {
+        console.log(`🔍 Событие ${index}:`, {
+          id: event.id,
+          is_recurring: event.is_recurring,
+          occurrence_id: event.occurrence_id,
+          type: typeof event.is_recurring,
+          fullEvent: event
+        });
+      });
+      
       setEvents(response.data.events);
+      setSelectedMonth(currentMonth);
+      setSelectedYear(currentYear);
     } catch (error) {
-      console.error('Ошибка загрузки событий:', error);
+      console.error('Ошибка при загрузке событий:', error);
     } finally {
       setLoading(false);
-      eventsLoadRef.current = false;
     }
   };
 
@@ -501,9 +500,26 @@ function App() {
     }
   };
 
-  const handleEventDelete = async (eventId: string): Promise<void> => {
+  const handleEventDelete = async (eventId: string, isRecurring?: boolean, occurrenceId?: number): Promise<void> => {
     try {
-      const response = await axios.delete(`/api/events/${eventId}`);
+      // Для рекуррентных событий используем occurrence_id, иначе обычный id
+      const deleteId = isRecurring && occurrenceId ? occurrenceId.toString() : eventId;
+      
+      // Явно преобразуем в boolean, чтобы избежать undefined
+      const isRecurringFlag = Boolean(isRecurring);
+      
+      console.log('🔍 handleEventDelete - Отладка:', {
+        eventId,
+        isRecurring,
+        occurrenceId,
+        deleteId,
+        isRecurringFlag,
+        payload: { is_recurring: isRecurringFlag }
+      });
+      
+      const response = await axios.delete(`/api/events/${deleteId}`, {
+        data: { is_recurring: isRecurringFlag }
+      });
       if (response.status === 200) {
         // Добавляем небольшую задержку для обновления связанных данных на сервере
         await new Promise(resolve => setTimeout(resolve, 100));

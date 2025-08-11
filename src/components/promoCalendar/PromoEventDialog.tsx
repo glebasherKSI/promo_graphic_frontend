@@ -23,7 +23,8 @@ import {
   DialogContentText,
   OutlinedInput,
   Checkbox,
-  ListItemText
+  ListItemText,
+  Paper
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { PromoEvent, PromoEventCreate, PromoEventFormData, InfoChannel, InfoChannelCreate, ApiUser } from '../../types';
@@ -32,13 +33,14 @@ import dayjs from '../../utils/dayjs';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import WarningIcon from '@mui/icons-material/Warning';
 import axios from 'axios';
 
 interface PromoEventDialogProps {
   open: boolean;
   onClose: () => void;
   onSave: (eventData: PromoEventCreate) => Promise<void>;
-  onDelete: (eventId: string) => Promise<void>;
+  onDelete: (eventId: string, isRecurring?: boolean, occurrenceId?: number) => Promise<void>;
   event: PromoEvent | null;
   projects: string[];
 }
@@ -319,10 +321,21 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
   const handleDelete = async () => {
     if (!event?.id) return;
     
+    console.log('🔍 PromoEventDialog handleDelete - Отладка:', {
+      eventId: event.id,
+      isRecurring: event.is_recurring,
+      occurrenceId: event.occurrence_id,
+      event: event
+    });
+    
     try {
       setLoading(true);
       setError(null);
-      await onDelete(event.id);
+      
+      // Явно преобразуем в boolean, чтобы избежать undefined
+      const isRecurringFlag = Boolean(event.is_recurring);
+      
+      await onDelete(event.id, isRecurringFlag, event.occurrence_id);
       setSuccessMessage(true);
       setDeleteConfirmOpen(false);
       // Добавляем небольшую задержку для обновления UI
@@ -368,6 +381,16 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
     setChannelData(newChannelData);
   };
 
+  const handleChannelDataChange = (type: string, field: keyof Partial<InfoChannel>, value: any) => {
+    setChannelData(prev => ({
+      ...prev,
+      [type]: {
+        ...prev[type],
+        [field]: value
+      }
+    }));
+  };
+
   return (
     <>
       <Dialog 
@@ -381,6 +404,26 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
         </DialogTitle>
         
         <DialogContent>
+          {/* Предупреждение для рекуррентных событий */}
+          {event?.is_recurring && (
+            <Paper 
+              sx={{ 
+                p: 2, 
+                mb: 2, 
+                backgroundColor: 'warning.light', 
+                color: 'warning.contrastText',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1
+              }}
+            >
+              <WarningIcon />
+              <Typography variant="body2">
+                Это рекуррентное событие. Его нельзя редактировать, только удалить.
+              </Typography>
+            </Paper>
+          )}
+          
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
             {/* ID */}
             {event?.id && (
@@ -399,6 +442,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
                 value={formData.project || ''}
                 onChange={(e) => handleChange('project', e.target.value)}
                 required
+                disabled={event?.is_recurring}
               >
                 {projects.map(project => (
                   <MenuItem key={project} value={project}>{project}</MenuItem>
@@ -412,7 +456,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
               <Select
                 value={formData.responsible_id || ''}
                 onChange={(e) => handleChange('responsible_id', e.target.value)}
-                disabled={usersLoading}
+                disabled={usersLoading || event?.is_recurring}
               >
                 <MenuItem value="">
                   <em>Не выбран</em>
@@ -445,6 +489,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
                 value={formData.promo_type || ''}
                 onChange={(e) => handleChange('promo_type', e.target.value)}
                 required
+                disabled={event?.is_recurring}
               >
                 {PROMO_TYPES.map(type => (
                   <MenuItem key={type} value={type}>{type}</MenuItem>
@@ -459,6 +504,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
                 value={formData.promo_kind || ''}
                 onChange={(e) => handleChange('promo_kind', e.target.value)}
                 required
+                disabled={event?.is_recurring}
               >
                 {getAvailableKinds(formData.promo_type || '').map(kind => (
                   <MenuItem key={kind} value={kind}>{kind}</MenuItem>
@@ -473,6 +519,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
               value={formData.name || ''}
               onChange={(e) => handleChange('name', e.target.value)}
               required
+              disabled={event?.is_recurring}
             />
 
             {/* Комментарий */}
@@ -483,6 +530,7 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
               onChange={(e) => handleChange('comment', e.target.value)}
               multiline
               rows={4}
+              disabled={event?.is_recurring}
             />
 
             {/* Сегменты */}
@@ -492,55 +540,32 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
               onChange={(e) => handleChange('segments', e.target.value)}
               fullWidth
               helperText="Введите сегменты через запятую"
+              disabled={event?.is_recurring}
             />
 
             {/* Даты */}
             <Box sx={{ display: 'flex', gap: 2 }}>
               <DateTimePicker
                 label="Дата начала *"
-                value={formData.start_date ? dayjs.utc(formData.start_date) : null}
+                value={formData.start_date ? dayjs(formData.start_date) : null}
                 onChange={(value) => handleChange('start_date', value ? value.format('YYYY-MM-DDTHH:mm:ss') : null)}
-                format="DD-MM-YYYY HH:mm"
+                disabled={event?.is_recurring}
                 slotProps={{
                   textField: {
                     fullWidth: true,
                     required: true
-                  },
-                  actionBar: {
-                    // Меняем цвет кнопки "OK" на желаемый (например, основной цвет темы)
-                    sx: {
-                      '& .MuiButton-root': {
-                        color: 'secondary.contrastText',
-                        backgroundColor: 'secondary.main', // основной синий MUI, замените на нужный
-                        '&:hover': {
-                          backgroundColor: 'secondary.dark',
-                        },
-                      }
-                    }
                   }
                 }}
               />
               <DateTimePicker
                 label="Дата окончания *"
-                value={formData.end_date ? dayjs.utc(formData.end_date) : null}
+                value={formData.end_date ? dayjs(formData.end_date) : null}
                 onChange={(value) => handleChange('end_date', value ? value.format('YYYY-MM-DDTHH:mm:ss') : null)}
-                format="DD-MM-YYYY HH:mm"
+                disabled={event?.is_recurring}
                 slotProps={{
                   textField: {
                     fullWidth: true,
                     required: true
-                  },
-                  actionBar: {
-                    // Меняем цвет кнопки "OK" на желаемый (например, основной цвет темы)
-                    sx: {
-                      '& .MuiButton-root': {
-                        color: 'secondary.contrastText',
-                        backgroundColor: 'secondary.main', // основной синий MUI, замените на нужный
-                        '&:hover': {
-                          backgroundColor: 'secondary.dark',
-                        },
-                      }
-                    }
                   }
                 }}
               />
@@ -552,15 +577,69 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
               label="Ссылка"
               value={formData.link || ''}
               onChange={(e) => handleChange('link', e.target.value)}
+              disabled={event?.is_recurring}
             />
 
             {/* Информирование */}
-            <Divider sx={{ my: 2 }} />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="h6">
-                Информирование
-              </Typography>
-            </Box>
+            <Typography variant="h6" gutterBottom>
+              Информирование
+            </Typography>
+
+            {/* Мультивыбор типов каналов */}
+            <FormControl fullWidth>
+              <InputLabel>Типы информирования</InputLabel>
+              <Select
+                multiple
+                value={selectedChannelTypes}
+                onChange={handleChannelTypesChange}
+                input={<OutlinedInput label="Типы информирования" />}
+                disabled={event?.is_recurring}
+                renderValue={(selected) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {selected.map((value) => (
+                      <Chip key={value} label={value} size="small" />
+                    ))}
+                  </Box>
+                )}
+              >
+                {CHANNEL_TYPES.map((type) => (
+                  <MenuItem key={type} value={type}>
+                    <Checkbox checked={selectedChannelTypes.indexOf(type) > -1} />
+                    <ListItemText primary={type} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            {/* Поля для выбранных каналов */}
+            {selectedChannelTypes.length > 0 && (
+              <Stack spacing={2}>
+                {selectedChannelTypes.map((type) => (
+                  <Box
+                    key={type}
+                    sx={{
+                      p: 2,
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 1,
+                    }}
+                  >
+                    <Typography variant="subtitle2" gutterBottom>
+                      {type}
+                    </Typography>
+                    <Stack direction="row" spacing={2} alignItems="flex-start">
+                      <DateTimePicker
+                        label="Дата старта"
+                        value={channelData[type]?.start_date ? dayjs(channelData[type].start_date) : null}
+                        onChange={(date) => handleChannelDataChange(type, 'start_date', date?.format('YYYY-MM-DDTHH:mm:ss'))}
+                        disabled={event?.is_recurring}
+                        slotProps={{ textField: { size: 'small', fullWidth: true } }}
+                      />
+                    </Stack>
+                  </Box>
+                ))}
+              </Stack>
+            )}
 
             {/* Существующие каналы информирования (только для чтения) */}
             {event && event.info_channels && event.info_channels.length > 0 && (
@@ -689,12 +768,14 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
         </DialogContent>
 
         <DialogActions>
+          {/* Кнопка удаления */}
           {event && (
-            <Button 
-              onClick={() => setDeleteConfirmOpen(true)} 
-              color="error" 
+            <Button
+              onClick={() => setDeleteConfirmOpen(true)}
+              color="error"
+              variant="outlined"
               disabled={loading}
-              sx={{ mr: 'auto' }}
+              startIcon={<DeleteIcon />}
             >
               Удалить
             </Button>
@@ -702,32 +783,35 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
           <Button onClick={onClose} color="secondary" disabled={loading}>
             Отмена
           </Button>
-          <Box sx={{ position: 'relative', minWidth: 100 }}>
-            <Button 
-              onClick={handleSubmit} 
-              variant="contained" 
-              disabled={loading}
-              sx={{ 
-                width: '100%',
-                visibility: loading ? 'hidden' : 'visible'
-              }}
-            >
-              Сохранить
-            </Button>
-            {loading && (
-              <CircularProgress
-                size={24}
-                sx={{
-                  color: '#fff',
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  marginTop: '-12px',
-                  marginLeft: '-12px',
+          {/* Кнопка сохранения - скрываем для рекуррентных событий */}
+          {!event?.is_recurring && (
+            <Box sx={{ position: 'relative', minWidth: 100 }}>
+              <Button 
+                onClick={handleSubmit} 
+                variant="contained" 
+                disabled={loading}
+                sx={{ 
+                  width: '100%',
+                  visibility: loading ? 'hidden' : 'visible'
                 }}
-              />
-            )}
-          </Box>
+              >
+                Сохранить
+              </Button>
+              {loading && (
+                <CircularProgress
+                  size={24}
+                  sx={{
+                    color: '#fff',
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    marginTop: '-12px',
+                    marginLeft: '-12px',
+                  }}
+                />
+              )}
+            </Box>
+          )}
         </DialogActions>
       </Dialog>
 

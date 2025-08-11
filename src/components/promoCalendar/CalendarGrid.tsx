@@ -887,6 +887,12 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       if (selectedEvent._channel) {
         onChannelEdit(selectedEvent._channel);
       } else {
+        // Проверяем, является ли событие рекуррентным
+        if (selectedEvent.is_recurring) {
+          // Для рекуррентных событий показываем предупреждение вместо редактирования
+          console.warn('Рекуррентное событие нельзя редактировать');
+          return;
+        }
         onEventEdit(selectedEvent);
       }
     }
@@ -907,7 +913,25 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
           // Добавляем небольшую задержку для обновления связанных данных на сервере
           await new Promise(resolve => setTimeout(resolve, 100));
         } else {
-          await axios.delete(`/api/events/${selectedEvent.id}`);
+          // Для рекуррентных событий используем occurrence_id, иначе обычный id
+          const deleteId = selectedEvent.is_recurring && selectedEvent.occurrence_id 
+            ? selectedEvent.occurrence_id.toString() 
+            : selectedEvent.id;
+          
+          console.log('🔍 CalendarGrid handleConfirmDelete - Отладка:', {
+            selectedEvent,
+            isRecurring: selectedEvent.is_recurring,
+            occurrenceId: selectedEvent.occurrence_id,
+            deleteId,
+            payload: { is_recurring: selectedEvent.is_recurring || false }
+          });
+          
+          // Явно преобразуем в boolean, чтобы избежать undefined
+          const isRecurringFlag = Boolean(selectedEvent.is_recurring);
+          
+          await axios.delete(`/api/events/${deleteId}`, {
+            data: { is_recurring: isRecurringFlag }
+          });
         }
         await loadEvents();
       } catch (error) {
@@ -1246,148 +1270,12 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     handleCloseCellMenu();
   }, [selectedCellsData, onChannelCreate, handleCloseCellMenu]);
 
-  // Мемоизированная функция для генерации рекуррентных событий
-  const generateRecurringEventsMemoized = useMemo(() => {
-    return memoizeWithKey(
-      (event: PromoEvent): PromoEvent[] => {
-        // Проверяем валидность дат
-        if (!event.start_date || !event.end_date) {
-          console.warn('Событие с невалидными датами:', event);
-          return [event];
-        }
-
-        try {
-          if (event.promo_type === 'Кэшбек') {
-            // Кэшбек: каждую неделю в тот же день недели и время, на год вперёд
-            const result: PromoEvent[] = [];
-            let currentStart = dayjs.utc(event.start_date);
-            let currentEnd = dayjs.utc(event.end_date);
-            
-            // Проверяем валидность парсинга дат
-            if (!currentStart.isValid() || !currentEnd.isValid()) {
-              console.warn('Невалидные даты для кэшбека:', event);
-              return [event];
-            }
-            
-            const yearEnd = currentStart.add(1, 'year');
-            let iterationCount = 0;
-            const maxIterations = 60; // Ограничиваем количество итераций
-            
-            while (currentStart.isBefore(yearEnd) && iterationCount < maxIterations) {
-              result.push({
-                ...event,
-                start_date: currentStart.toISOString(),
-                end_date: currentEnd.toISOString()
-              });
-              currentStart = currentStart.add(1, 'week');
-              currentEnd = currentEnd.add(1, 'week');
-              iterationCount++;
-            }
-            return result;
-          }
-          
-          // Турниры и Лотереи: регулярные — логика одинаковая (подряд без перерывов)
-          const start = dayjs.utc(event.start_date);
-          const end = dayjs.utc(event.end_date);
-          
-          // Проверяем валидность парсинга дат
-          if (!start.isValid() || !end.isValid()) {
-            console.warn('Невалидные даты для турнира/лотереи:', event);
-            return [event];
-          }
-          
-          // Вычисляем точную длительность в миллисекундах
-          const durationMs = end.diff(start, 'millisecond');
-          
-          // Проверяем разумность длительности
-          if (durationMs <= 0 || durationMs > 365 * 24 * 60 * 60 * 1000) {
-            console.warn('Неразумная длительность события:', durationMs, event);
-            return [event];
-          }
-          
-          let currentStart = start;
-          const yearEnd = start.add(1, 'year');
-          const result: PromoEvent[] = [];
-          let iterationCount = 0;
-          const maxIterations = 100; // Ограничиваем количество итераций
-          
-          while (currentStart.isBefore(yearEnd) && iterationCount < maxIterations) {
-            // Рассчитываем конец события, добавляя точную длительность в миллисекундах
-            const currentEnd = currentStart.add(durationMs, 'millisecond');
-            
-            // Проверяем валидность получившихся дат
-            if (!currentStart.isValid() || !currentEnd.isValid()) {
-              console.warn('Невалидные даты при генерации рекуррентного события:', currentStart, currentEnd);
-              break;
-            }
-            
-            result.push({
-              ...event,
-              start_date: currentStart.toISOString(),
-              end_date: currentEnd.toISOString()
-            });
-            
-            // Следующий турнир начинается сразу после окончания предыдущего (подряд без перерывов)
-            currentStart = currentEnd;
-            iterationCount++;
-          }
-          
-          return result.length > 0 ? result : [event];
-        } catch (error) {
-          console.error('Ошибка при генерации рекуррентных событий:', error, event);
-          return [event];
-        }
-      },
-      createEventKey // Используем стабильную функцию ключа
-    );
-  }, []); // Пустой массив зависимостей, так как функция не зависит от внешних переменных
-
   const processedEvents = useMemo(() => {
-    let allEvents: PromoEvent[] = [];
-    
-
-    
-    for (const event of events) {
-      // Проверяем валидность события перед обработкой
-      if (!event || !event.start_date || !event.end_date) {
-        console.warn('Пропускаем событие с невалидными данными:', event);
-        continue;
-      }
-      
-      // Генерируем рекуррентные события только для основных промо-событий
-      // Каналы информирования (info_channels) обрабатываются отдельно и не должны дублироваться
-      if (
-        (event.promo_type === 'Турниры' && event.promo_kind === 'Регулярные') ||
-        (event.promo_type === 'Лотереи' && event.promo_kind === 'Регулярные') ||
-        event.promo_type === 'Кэшбек'
-      ) {
-        // Генерируем рекуррентные события
-        const recurringEvents = generateRecurringEventsMemoized(event);
-        
-        // Для каждого рекуррентного события сохраняем каналы только у оригинального события
-        recurringEvents.forEach((recurringEvent: PromoEvent, index: number) => {
-          if (index === 0) {
-            // Первое событие (оригинальное) - сохраняем все каналы
-            allEvents.push(recurringEvent);
-          } else {
-            // Остальные рекуррентные события - убираем каналы информирования
-            allEvents.push({
-              ...recurringEvent,
-              info_channels: []
-            });
-          }
-        });
-      } else {
-        allEvents.push(event);
-      }
-    }
-    
-    // События уже отфильтрованы в Calendar.tsx, поэтому здесь не нужно дополнительно фильтровать
-    // по основным датам событий. Но нужно проверить, что каналы информирования попадают в выбранный месяц
+    // Просто возвращаем события как есть, без генерации рекуррентных событий
     const monthStart = dayjs.utc().year(selectedYear).month(selectedMonth - 1).startOf('month');
     const monthEnd = monthStart.endOf('month');
     
-    return allEvents.map(ev => {
+    return events.map(ev => {
       // Если у события есть каналы информирования, фильтруем только те, которые попадают в выбранный месяц
       if (ev.info_channels && ev.info_channels.length > 0) {
         const filteredChannels = ev.info_channels.filter(channel => {
@@ -1412,7 +1300,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       
       return ev;
     });
-  }, [events, selectedMonth, selectedYear, generateRecurringEventsMemoized]);
+  }, [events, selectedMonth, selectedYear]);
 
   return (
     <>
@@ -1567,8 +1455,12 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       >
         {selectedEvent && (
           <>
-            <MenuItem onClick={handleEdit} sx={{ mt: 1 }}>
-              Редактировать
+            <MenuItem 
+              onClick={handleEdit} 
+              sx={{ mt: 1 }}
+              disabled={selectedEvent.is_recurring}
+            >
+              {selectedEvent.is_recurring ? 'Редактировать (недоступно для рекуррентных событий)' : 'Редактировать'}
             </MenuItem>
             {auth.user?.role === 'admin' && (
               <MenuItem 
