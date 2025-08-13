@@ -19,7 +19,7 @@ import Navigation from './components/general/Navigation';
 import Calendar from './pages/Calendar';
 import Tasks from './pages/Tasks';
 import { LoginForm } from './components/general/LoginForm';
-import { AuthState, User, PromoEvent, PromoEventCreate, InfoChannel } from './types';
+import { AuthState, User, PromoEvent, PromoEventCreate, InfoChannel, ApiUser } from './types';
 import axios from 'axios';
 import { EventDialog, PromoEventDialog, InfoChannelDialog } from './components/promoCalendar';
 import ProfileEditDialog from './components/general/ProfileEditDialog';
@@ -275,6 +275,7 @@ export const PROJECTS = ['ROX', 'FRESH', 'SOL', 'JET', 'IZZI', 'VOLNA', 'Legzo',
 
 function App() {
   const [events, setEvents] = useState<PromoEvent[]>([]);
+  const [standaloneChannels, setStandaloneChannels] = useState<InfoChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [openCreateDialog, setOpenCreateDialog] = useState(false);
   const [openEditDialog, setOpenEditDialog] = useState(false);
@@ -306,6 +307,10 @@ function App() {
     isLoading: true
   });
 
+  // Добавляем состояние для кэширования пользователей
+  const [cachedUsers, setCachedUsers] = useState<ApiUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+
   // Добавляем refs для предотвращения дублирующих запросов
   const authCheckRef = useRef(false);
   const eventsLoadRef = useRef(false);
@@ -324,12 +329,17 @@ function App() {
       const currentMonth = month || selectedMonth;
       const currentYear = year || selectedYear;
       
-      const response = await axios.get(`/api/events?month=${currentYear}-${String(currentMonth).padStart(2, '0')}`);
+      // Загружаем события и standalone-каналы параллельно
+      const [eventsResponse, channelsResponse] = await Promise.all([
+        axios.get(`/api/events?month=${currentYear}-${String(currentMonth).padStart(2, '0')}`),
+        axios.get(`/api/standalone-channels?month=${currentYear}-${String(currentMonth).padStart(2, '0')}`)
+      ]);
       
-      console.log('🔍 loadEvents - Загруженные события:', response.data.events);
+      console.log('🔍 loadEvents - Загруженные события:', eventsResponse.data.events);
+      console.log('🔍 loadEvents - Загруженные standalone-каналы:', channelsResponse.data.channels);
       
       // Логируем структуру каждого события для отладки
-      response.data.events.forEach((event: PromoEvent, index: number) => {
+      eventsResponse.data.events.forEach((event: PromoEvent, index: number) => {
         console.log(`🔍 Событие ${index}:`, {
           id: event.id,
           is_recurring: event.is_recurring,
@@ -339,13 +349,27 @@ function App() {
         });
       });
       
-      setEvents(response.data.events);
+      setEvents(eventsResponse.data.events);
+      setStandaloneChannels(channelsResponse.data.channels);
       // Не меняем selectedMonth/selectedYear здесь, чтобы не триггерить лишние перезагрузки
     } catch (error) {
       console.error('Ошибка при загрузке событий:', error);
     } finally {
       setLoading(false);
       eventsLoadRef.current = false;
+    }
+  };
+
+  // Загрузка пользователей
+  const loadUsers = async () => {
+    try {
+      setUsersLoading(true);
+      const response = await axios.get('/api/users/list/brief');
+      setCachedUsers(response.data);
+    } catch (error) {
+      console.error('Ошибка при загрузке пользователей:', error);
+    } finally {
+      setUsersLoading(false);
     }
   };
 
@@ -426,6 +450,13 @@ function App() {
       loadEvents();
     }
   }, [selectedMonth, selectedYear, auth.isAuthenticated]);
+
+  // Загружаем пользователей при авторизации
+  useEffect(() => {
+    if (auth.isAuthenticated) {
+      loadUsers();
+    }
+  }, [auth.isAuthenticated]);
 
   const handleLogin = (user: User, tokens: { access_token: string; refresh_token: string; expires_in: number }) => {
     // Устанавливаем токен в заголовки axios
@@ -698,6 +729,7 @@ function App() {
                 element={
                   <Calendar 
                     events={events}
+                    standaloneChannels={standaloneChannels}
                     loading={loading}
                 selectedMonth={selectedMonth} 
                 selectedYear={selectedYear} 
@@ -727,6 +759,8 @@ function App() {
               onSave={handleEventSave}
               event={null}
               projects={PROJECTS}
+              users={cachedUsers}
+              usersLoading={usersLoading}
             />
 
             {/* Диалог редактирования события */}
@@ -737,6 +771,8 @@ function App() {
               onDelete={handleEventDelete}
               event={editingEvent}
               projects={PROJECTS}
+              users={cachedUsers}
+              usersLoading={usersLoading}
             />
 
             {/* Диалог редактирования канала */}
@@ -771,6 +807,8 @@ function App() {
                 info_channels: []
               } as PromoEvent : null}
               projects={PROJECTS}
+              users={cachedUsers}
+              usersLoading={usersLoading}
             />
 
             {/* Диалог создания канала из календаря */}

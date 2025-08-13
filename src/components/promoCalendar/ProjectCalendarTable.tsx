@@ -23,6 +23,7 @@ interface ProjectCalendarTableProps {
   project: string;
   projectIndex: number;
   events: PromoEvent[];
+  standaloneChannels: InfoChannel[];
   days: Array<{ dayOfMonth: number; date: any; dayOfWeek: string; isWeekend: boolean }>;
   daysInMonth: number;
   PROMO_TYPES: readonly string[];
@@ -51,6 +52,7 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
   project,
   projectIndex,
   events,
+  standaloneChannels,
   days,
   daysInMonth,
   PROMO_TYPES,
@@ -356,7 +358,8 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
               {channelType}
             </TableCell>
             {days.map(({ dayOfMonth, date, isWeekend }) => {
-              const channels = events
+              // Получаем каналы из событий
+              const eventChannels = events
                 .filter(event => event.project === project)
                 .flatMap(event =>
                   (event.info_channels || []).map(channel => ({
@@ -366,26 +369,41 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
                     parentPromoType: event.promo_type,
                     parentPromoKind: event.promo_kind
                   }))
-                )
-                .filter(channel => {
-                  if (!channel || channel.type !== channelType) return false;
+                );
+
+              // Получаем standalone-каналы для текущего проекта
+              const projectStandaloneChannels = standaloneChannels
+                .filter(channel => channel.project === project)
+                .map(channel => ({
+                  ...channel,
+                  eventId: null,
+                  eventName: null,
+                  parentPromoType: null,
+                  parentPromoKind: null
+                }));
+
+              // Объединяем все каналы
+              const allChannels = [...eventChannels, ...projectStandaloneChannels];
+
+              const channels = allChannels.filter(channel => {
+                if (!channel || channel.type !== channelType) return false;
+                
+                try {
+                  const channelDate = dayjs.utc(channel.start_date);
+                  const currentDate = dayjs.utc(date);
                   
-                  try {
-                    const channelDate = dayjs.utc(channel.start_date);
-                    const currentDate = dayjs.utc(date);
-                    
-                    // Проверяем валидность дат
-                    if (!channelDate.isValid() || !currentDate.isValid()) {
-                      return false;
-                    }
-                    
-                    // Проверяем, что канал информирования попадает на текущий день
-                    return channelDate.isSame(currentDate, 'day');
-                  } catch (error) {
-                    console.warn('Ошибка при фильтрации канала в таблице:', error, channel);
+                  // Проверяем валидность дат
+                  if (!channelDate.isValid() || !currentDate.isValid()) {
                     return false;
                   }
-                });
+                  
+                  // Проверяем, что канал информирования попадает на текущий день
+                  return channelDate.isSame(currentDate, 'day');
+                } catch (error) {
+                  console.warn('Ошибка при фильтрации канала в таблице:', error, channel);
+                  return false;
+                }
+              });
 
               const cellKey = getCellKey(project, channelType, dayOfMonth);
 
@@ -418,10 +436,14 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
                 >
                   <Stack spacing={0.25}>
                     {channels.map((channel, index) => {
-                      // Если есть родительское промо, используем его цвет
+                      // Если есть родительское промо, используем его цвет, иначе цвет канала
                       const promoColor = channel.parentPromoType
                         ? getEventColor(channel.parentPromoType, channel.parentPromoKind)
                         : getChannelColor(channel.type);
+                      
+                      // Определяем label для standalone-каналов
+                      const channelLabel = channel.parentPromoType ? channel.type : `${channel.type}*`;
+                      
                       return (
                         <Tooltip
                           key={`${channel.id}-${index}`}
@@ -443,7 +465,7 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
                           }}
                         >
                           <Chip
-                            label={channel.type}
+                            label={channelLabel}
                             size="small"
                             sx={{
                               backgroundColor: promoColor,
@@ -453,15 +475,17 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
                               '& .MuiChip-label': {
                                 px: 1,
                               },
-                              ...(highlightedEventId === channel.eventId && pulseAnimation),
+                              // Подсветка только для каналов с родительским промо-событием
+                              ...(channel.eventId && highlightedEventId === channel.eventId && pulseAnimation),
                             }}
                             onContextMenu={(e: React.MouseEvent) => handleContextMenu(e, channel, true)}
                             onClick={(e: React.MouseEvent) => {
                               e.preventDefault();
                               e.stopPropagation();
                             }}
-                            onMouseEnter={() => setHighlightedEventId(channel.eventId)}
-                            onMouseLeave={() => setHighlightedEventId(null)}
+                            // Подсветка только для каналов с родительским промо-событием
+                            onMouseEnter={() => channel.eventId && setHighlightedEventId(channel.eventId)}
+                            onMouseLeave={() => channel.eventId && setHighlightedEventId(null)}
                           />
                         </Tooltip>
                       );
@@ -499,24 +523,21 @@ export default React.memo(ProjectCalendarTable, (prevProps, nextProps) => {
   }
 
   // Проверяем события - сравниваем по ключам для оптимизации
-  if (prevProps.events.length !== nextProps.events.length) {
-    return false;
-  }
+  const prevEventKeys = prevProps.events.map(event => createEventKey(event));
+  const nextEventKeys = nextProps.events.map(event => createEventKey(event));
   
-  if (!shallowCompareArrays(prevProps.events, nextProps.events, createEventKey)) {
-    return false;
-  }
-  
-  // Дополнительная проверка для каналов информирования
-  const prevChannelsCount = prevProps.events.reduce((count, event) => 
-    count + (event.info_channels?.length || 0), 0);
-  const nextChannelsCount = nextProps.events.reduce((count, event) => 
-    count + (event.info_channels?.length || 0), 0);
-  
-  if (prevChannelsCount !== nextChannelsCount) {
+  if (!shallowCompareArrays(prevEventKeys, nextEventKeys)) {
     return false;
   }
 
+  // Проверяем standalone-каналы
+  const prevStandaloneChannelKeys = prevProps.standaloneChannels.map(channel => `${channel.id}-${channel.start_date}`);
+  const nextStandaloneChannelKeys = nextProps.standaloneChannels.map(channel => `${channel.id}-${channel.start_date}`);
+  
+  if (!shallowCompareArrays(prevStandaloneChannelKeys, nextStandaloneChannelKeys)) {
+    return false;
+  }
+  
   // Проверяем дни - поверхностное сравнение
   if (!shallowCompareArrays(
     prevProps.days, 

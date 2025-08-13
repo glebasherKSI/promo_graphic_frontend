@@ -7,6 +7,7 @@ import { shallowCompareArrays, createEventKey } from '../../utils/memoization';
 interface EventBarsLayerProps {
   project: string;
   events: PromoEvent[];
+  standaloneChannels: InfoChannel[];
   days: Array<{ dayOfMonth: number; date: any; dayOfWeek: string; isWeekend: boolean }>;
   selectedMonth: number;
   selectedYear: number;
@@ -26,6 +27,7 @@ interface EventBarsLayerProps {
 const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
   project,
   events,
+  standaloneChannels,
   days,
   selectedMonth,
   selectedYear,
@@ -346,6 +348,141 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
       highlightedEventId, setHighlightedEventId, getEventTooltipContent, 
       pulseAnimation, project, renderKey]);
 
+  // Функция для рендера standalone-каналов
+  const renderStandaloneChannels = React.useCallback(() => {
+    const allChannelBars: React.ReactNode[] = [];
+    
+    // Группируем каналы по типам для правильного позиционирования
+    const channelsByType = new Map<string, InfoChannel[]>();
+    
+    standaloneChannels
+      .filter(channel => channel.project === project)
+      .forEach(channel => {
+        if (!channelsByType.has(channel.type)) {
+          channelsByType.set(channel.type, []);
+        }
+        channelsByType.get(channel.type)!.push(channel);
+      });
+
+    // Рендерим каналы для каждого типа
+    channelsByType.forEach((channels, channelType) => {
+      // Находим соответствующий тип промо для позиционирования
+      const promoType = PROMO_TYPES.find(type => type === channelType) || channelType;
+      
+      for (let index = 0; index < channels.length; index++) {
+        const channel = channels[index];
+        const channelDate = dayjs.utc(channel.start_date);
+        const monthStart = dayjs.utc().year(selectedYear).month(selectedMonth - 1).startOf('month');
+        const monthEnd = monthStart.endOf('month');
+
+        // Если канал не попадает в месяц, не рендерим
+        if (!channelDate.isBetween(monthStart, monthEnd, 'day', '[]')) {
+          continue;
+        }
+
+        const day = channelDate.date();
+        
+        // Создаем ключ для кэша DOM данных
+        const cacheKey = `${project}-${promoType}-${selectedMonth}-${selectedYear}-${renderKey}-channel-${channel.id}`;
+        
+        // Получаем кэшированные DOM данные
+        const domData = getCachedDOMData(cacheKey);
+        if (!domData) continue;
+        
+        // Получаем позицию ячейки из кэша
+        const cellRect = domData.cellRects.get(`${promoType}-${day}`);
+        
+        if (!cellRect) {
+          continue;
+        }
+        
+        // Вычисляем позицию X
+        const leftOffset = cellRect.left - domData.tableRect.left;
+        
+        // Позиция Y - используем позицию ячейки + смещение для канала
+        const topOffset = cellRect.top - domData.tableRect.top + 6;
+
+        const bar = (
+          <Tooltip
+            key={`channel-${channel.id}-${index}`}
+            title={getEventTooltipContent(channel, true)}
+            placement="top"
+            arrow
+            enterDelay={200}
+            leaveDelay={0}
+            enterNextDelay={100}
+            PopperProps={{
+              sx: {
+                '& .MuiTooltip-tooltip': {
+                  bgcolor: 'rgba(51, 58, 86, 0.65)',
+                  color: '#eff0f1',
+                  p: 0,
+                  maxWidth: 'none',
+                  backdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+                  fontSize: '0.85rem',
+                  lineHeight: 1.4
+                },
+                '& .MuiTooltip-arrow': {
+                  color: 'rgba(51, 58, 86, 0.65)'
+                }
+              }
+            }}
+          >
+            <Box
+              sx={{
+                position: 'absolute',
+                left: `${leftOffset}px`,
+                top: `${topOffset}px`,
+                width: '24px',
+                height: `${CHIP_HEIGHT}px`,
+                backgroundColor: '#FFA586', // Цвет для standalone-каналов
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                pointerEvents: 'auto',
+                border: '2px solid #B51A2B',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                transition: 'all 0.2s ease-in-out',
+                '&:hover': {
+                  transform: 'scale(1.05)',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)'
+                }
+                // Убираем pulseAnimation для standalone-каналов
+              }}
+              onContextMenu={(e) => handleContextMenu(e, channel, true)}
+              // Убираем onMouseEnter и onMouseLeave для standalone-каналов
+            >
+              <Typography
+                variant="caption"
+                sx={{
+                  color: '#000',
+                  fontWeight: 'bold',
+                  fontSize: '0.7rem',
+                  lineHeight: 1,
+                  textAlign: 'center',
+                  whiteSpace: 'nowrap',
+                  px: 0.5
+                }}
+              >
+                {channel.type}*
+              </Typography>
+            </Box>
+          </Tooltip>
+        );
+        
+        allChannelBars.push(bar);
+      }
+    });
+
+    return allChannelBars;
+  }, [standaloneChannels, project, selectedMonth, selectedYear, PROMO_TYPES, 
+      getCachedDOMData, getEventTooltipContent, handleContextMenu, 
+      renderKey]);
+
   return (
     <Box
       key={renderKey} // Принудительный ререндер при изменении таблицы
@@ -365,6 +502,7 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
       }}
     >
       {renderEventBars()}
+      {renderStandaloneChannels()}
     </Box>
   );
 };
@@ -389,6 +527,18 @@ export default React.memo(EventBarsLayer, (prevProps, nextProps) => {
   }
   
   if (!shallowCompareArrays(prevProps.events, nextProps.events, createEventKey)) {
+    return false;
+  }
+
+  // Проверяем standalone-каналы
+  if (prevProps.standaloneChannels.length !== nextProps.standaloneChannels.length) {
+    return false;
+  }
+  
+  const prevStandaloneChannelKeys = prevProps.standaloneChannels.map(channel => `${channel.id}-${channel.start_date}`);
+  const nextStandaloneChannelKeys = nextProps.standaloneChannels.map(channel => `${channel.id}-${channel.start_date}`);
+  
+  if (!shallowCompareArrays(prevStandaloneChannelKeys, nextStandaloneChannelKeys)) {
     return false;
   }
 

@@ -34,6 +34,8 @@ interface EventDialogProps {
   onSave: (eventData: PromoEventCreate) => Promise<void>;
   event: PromoEvent | null;
   projects: string[];
+  users: ApiUser[];
+  usersLoading: boolean;
 }
 
 const EventDialog: React.FC<EventDialogProps> = ({
@@ -41,7 +43,9 @@ const EventDialog: React.FC<EventDialogProps> = ({
   onClose,
   onSave,
   event,
-  projects
+  projects,
+  users,
+  usersLoading
 }) => {
   const [formData, setFormData] = useState<PromoEventFormData>({
     project: [],
@@ -60,28 +64,8 @@ const EventDialog: React.FC<EventDialogProps> = ({
   const [channelData, setChannelData] = useState<{[key: string]: Partial<InfoChannel>}>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [users, setUsers] = useState<ApiUser[]>([]);
-  const [usersLoading, setUsersLoading] = useState(false);
 
-  // Загрузка пользователей при открытии диалога
-  useEffect(() => {
-    if (open) {
-      fetchUsers();
-    }
-  }, [open]);
 
-  const fetchUsers = async () => {
-    try {
-      setUsersLoading(true);
-      const response = await axios.get('/api/users/list/brief');
-      setUsers(response.data);
-    } catch (error) {
-      console.error('Ошибка при загрузке пользователей:', error);
-      setError('Не удалось загрузить список пользователей');
-    } finally {
-      setUsersLoading(false);
-    }
-  };
 
   useEffect(() => {
     if (event) {

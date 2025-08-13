@@ -1,144 +1,101 @@
-import React, { useState } from 'react';
+import * as React from 'react';
 import {
   Box,
+  Button,
+  Drawer,
   Typography,
-  Chip,
-  Stack,
-  Collapse,
+  Divider,
   IconButton,
-  Paper,
-  Divider
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import { PROMO_EVENT_COLORS, CHANNEL_COLORS, PROMO_KINDS } from '../../constants/promoTypes';
+import CloseIcon from '@mui/icons-material/Close';
+import { PROMO_EVENT_COLORS } from '../../constants/promoTypes';
 
-const ColorLegend: React.FC = () => {
-  const [expanded, setExpanded] = useState(false);
+export default function ColorLegend() {
+  const [open, setOpen] = React.useState(false);
 
-  const handleToggle = () => {
-    setExpanded(!expanded);
-  };
-
-  // Группируем цвета промо-событий по типам
-  const groupedPromoColors = Object.entries(PROMO_EVENT_COLORS).reduce((acc, [key, color]) => {
-    if (key.includes('-')) {
-      const [type, kind] = key.split('-');
-      if (!acc[type]) acc[type] = [];
-      acc[type].push({ kind, color, key });
-    } else {
-      // Для типов без видов
-      if (!acc[key]) acc[key] = [];
-      acc[key].push({ kind: '', color, key });
-    }
-    return acc;
-  }, {} as { [type: string]: { kind: string; color: string; key: string }[] });
+  // Функция для группировки событий по категориям
+  const groupedEvents = React.useMemo(() => {
+    const groups: { [key: string]: Array<{ name: string; color: string }> } = {};
+    
+    Object.entries(PROMO_EVENT_COLORS).forEach(([eventName, color]) => {
+      const [category] = eventName.split('-');
+      if (!groups[category]) {
+        groups[category] = [];
+      }
+      groups[category].push({ name: eventName, color });
+    });
+    
+    return groups;
+  }, []);
 
   return (
-    <Paper 
-      sx={{ 
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        zIndex: 10,
-        bgcolor: '#333a56',
-        border: '1px solid rgba(255, 255, 255, 0.12)',
-        maxWidth: 350,
-        minWidth: 200
-      }}
-    >
-      <Box 
+    <>
+      <Button
+        variant="contained"
+        onClick={() => setOpen(true)}
         sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'space-between',
-          p: 1,
-          cursor: 'pointer'
+          whiteSpace: 'nowrap',
+          minWidth: 120,
+          height: 40,
+          borderRadius: 2
         }}
-        onClick={handleToggle}
       >
-        <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-          Легенда цветов
-        </Typography>
-        <IconButton size="small" sx={{ color: 'inherit' }}>
-          {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-        </IconButton>
-      </Box>
-      
-      <Collapse in={expanded}>
-        <Box sx={{ p: 2, pt: 0 }}>
-          {/* Промо-события */}
-          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-            Промо-события
-          </Typography>
-          
-          <Stack spacing={1.5} sx={{ mb: 2 }}>
-            {Object.entries(groupedPromoColors).map(([type, items]) => (
-              <Box key={type}>
-                <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 'medium', fontSize: '0.8rem' }}>
-                  {type}
+        Легенда цветов
+      </Button>
+
+      <Drawer
+        anchor="right"
+        open={open}
+        onClose={() => setOpen(false)}
+        PaperProps={{
+          sx: {
+            width: { xs: '92vw', sm: 420 },
+            maxWidth: '92vw',
+            bgcolor: 'background.paper',
+            borderTopLeftRadius: 12,
+            borderBottomLeftRadius: 12,
+          },
+        }}
+      >
+        <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography variant="h6">Легенда цветов</Typography>
+          <IconButton onClick={() => setOpen(false)} aria-label="Закрыть">
+            <CloseIcon />
+          </IconButton>
+        </Box>
+        <Divider />
+
+        <Box sx={{ p: 2, overflow: 'auto', height: '100%' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {Object.entries(groupedEvents).map(([category, events]) => (
+              <Box key={category}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: 'text.primary' }}>
+                  {category}
                 </Typography>
-                <Stack spacing={0.5}>
-                  {items.map(({ kind, color, key }) => (
-                    <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Chip
-                        size="small"
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                  {events.map((event) => (
+                    <Box key={event.name} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box
                         sx={{
-                          backgroundColor: color,
-                          color: '#000',
-                          fontSize: '0.65rem',
-                          height: 18,
-                          minWidth: 60,
-                          '& .MuiChip-label': {
-                            px: 0.5,
-                          }
+                          width: 16,
+                          height: 16,
+                          borderRadius: '50%',
+                          backgroundColor: event.color,
+                          border: '1px solid',
+                          borderColor: 'divider',
                         }}
-                        label={kind || type}
                       />
-                      <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
-                        {kind ? `${type} - ${kind}` : type}
+                      <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                        {event.name.replace(`${category}-`, '')}
                       </Typography>
                     </Box>
                   ))}
-                </Stack>
+                </Box>
               </Box>
             ))}
-          </Stack>
-
-          <Divider sx={{ my: 1.5, bgcolor: 'rgba(255, 255, 255, 0.12)' }} />
-
-          {/* Каналы информирования */}
-          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-            Каналы информирования
-          </Typography>
-          
-          <Stack spacing={0.5}>
-            {Object.entries(CHANNEL_COLORS).map(([channel, color]) => (
-              <Box key={channel} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Chip
-                  size="small"
-                  sx={{
-                    backgroundColor: color,
-                    color: '#000',
-                    fontSize: '0.65rem',
-                    height: 18,
-                    minWidth: 60,
-                    '& .MuiChip-label': {
-                      px: 0.5,
-                    }
-                  }}
-                  label={channel}
-                />
-                <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
-                  {channel}
-                </Typography>
-              </Box>
-            ))}
-          </Stack>
+          </Box>
         </Box>
-      </Collapse>
-    </Paper>
+      </Drawer>
+    </>
   );
-};
-
-export default ColorLegend; 
+}

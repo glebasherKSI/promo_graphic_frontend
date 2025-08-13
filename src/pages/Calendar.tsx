@@ -1,45 +1,58 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Box, 
-  Typography, 
-  FormControl, 
-  InputLabel, 
-  Select, 
-  MenuItem, 
-  Button, 
-  Chip, 
+// src/pages/Calendar.tsx
+import React, { useState, useMemo } from 'react';
+import {
+  Box,
+  Typography,
+  FormControl,
+  Select,
+  MenuItem,
+  Button,
+  Chip,
   Stack,
   Alert,
   ListSubheader,
   Checkbox,
-  ListItemText,
   Divider,
   CircularProgress,
-  SelectChangeEvent,
-  IconButton
+  IconButton,
+  FormControlLabel,
+  Paper,
+  Grid,
+  FormLabel,
 } from '@mui/material';
+import { SelectChangeEvent } from '@mui/material/Select';
 import { DatePicker } from '@mui/x-date-pickers';
-import dayjs from '../utils/dayjs';
-import { CalendarGrid } from '../components/promoCalendar';
-import ColorLegend from '../components/general/ColorLegend';
-import { PromoEvent, InfoChannel, AuthState } from '../types';
+import dayjs from 'dayjs';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 
-interface CalendarProps {
+import { CalendarGrid } from '../components/promoCalendar';
+import ColorLegend from '../components/general/ColorLegend';
+
+import { PromoEvent, InfoChannel, AuthState } from '../types';
+import { SPORT_PROMO_TYPES, SPORT_CHANNEL_TYPES } from '../constants/promoTypes';
+
+export interface CalendarProps {
   events: PromoEvent[];
+  standaloneChannels: InfoChannel[];
   loading: boolean;
+
   selectedMonth: number;
   selectedYear: number;
   selectedProjects: string[];
+
   auth: AuthState;
+
   onEventsUpdate: (events: PromoEvent[]) => void;
   loadEvents: () => Promise<void>;
+
   setSelectedMonth: (month: number) => void;
   setSelectedYear: (year: number) => void;
   setSelectedProjects: (projects: string[]) => void;
   setOpenDialog: (open: boolean) => void;
+
   PROJECTS: string[];
+
   handleEventEdit: (event: PromoEvent) => void;
   handleChannelEdit: (channel: InfoChannel) => void;
   handleEventCreate?: (eventData: any, project: string, startDate: string, endDate: string) => void;
@@ -48,6 +61,7 @@ interface CalendarProps {
 
 const Calendar: React.FC<CalendarProps> = ({
   events,
+  standaloneChannels,
   loading,
   selectedMonth,
   selectedYear,
@@ -63,56 +77,63 @@ const Calendar: React.FC<CalendarProps> = ({
   handleEventEdit,
   handleChannelEdit,
   handleEventCreate,
-  handleChannelCreate
+  handleChannelCreate,
 }) => {
-  // Инициализируем текущую дату при монтировании компонента (один раз)
-  useEffect(() => {
-    const now = dayjs();
-    setSelectedMonth(now.month() + 1);
-    setSelectedYear(now.year());
-  }, []);
+  const [hideSport, setHideSport] = useState(false);
 
-  // Фильтрация событий по выбранным проектам и месяцу
-  const filteredEvents = events.filter(event => {
-    // Проверяем, что событие принадлежит выбранным проектам
-    if (!selectedProjects.includes(event.project)) {
-      return false;
-    }
-    
-    const eventStartDate = dayjs(event.start_date);
-    const eventEndDate = dayjs(event.end_date);
-    const startOfMonth = dayjs().year(selectedYear).month(selectedMonth - 1).startOf('month');
-    const endOfMonth = startOfMonth.endOf('month');
+  const startOfMonth = useMemo(
+    () => dayjs().year(selectedYear).month(selectedMonth - 1).startOf('month'),
+    [selectedMonth, selectedYear]
+  );
+  const endOfMonth = useMemo(() => startOfMonth.endOf('month'), [startOfMonth]);
 
-    // Проверяем попадает ли само событие в месяц
-    const eventInMonth = (
-      (eventStartDate.isSameOrBefore(endOfMonth) && eventEndDate.isSameOrAfter(startOfMonth)) ||
-      (eventStartDate.isSameOrBefore(endOfMonth) && eventStartDate.isSameOrAfter(startOfMonth)) ||
-      (eventEndDate.isSameOrBefore(endOfMonth) && eventEndDate.isSameOrAfter(startOfMonth))
-    );
+  // События по фильтрам
+  const filteredEvents = useMemo(() => {
+    return events.filter((event) => {
+      if (!selectedProjects.includes(event.project)) return false;
 
-    // Проверяем есть ли каналы информирования в текущем месяце
-    const hasChannelsInMonth = event.info_channels && 
-      event.info_channels.some(channel => {
-        const channelDate = dayjs(channel.start_date);
-        return channelDate.isBetween(startOfMonth, endOfMonth, 'day', '[]');
-      });
+      if (hideSport && SPORT_PROMO_TYPES.includes(event.promo_type as any)) return false;
 
-    return eventInMonth || hasChannelsInMonth;
-  });
+      const evStart = dayjs(event.start_date);
+      const evEnd = dayjs(event.end_date);
+
+      const overlapsMonth =
+        evStart.isSameOrBefore(endOfMonth) && evEnd.isSameOrAfter(startOfMonth);
+
+      const hasChannelsInMonth =
+        event.info_channels &&
+        event.info_channels.some((channel) => {
+          if (hideSport && SPORT_CHANNEL_TYPES.includes(channel.type as any)) return false;
+          const chDate = dayjs(channel.start_date);
+          // включительно
+          return chDate.isBetween(startOfMonth, endOfMonth, 'day', '[]');
+        });
+
+      return overlapsMonth || hasChannelsInMonth;
+    });
+  }, [events, selectedProjects, hideSport, startOfMonth, endOfMonth]);
+
+  // Одиночные каналы по фильтрам
+  const filteredStandaloneChannels = useMemo(() => {
+    return standaloneChannels.filter((channel) => {
+      if (!selectedProjects.includes(channel.project)) return false;
+      if (hideSport && SPORT_CHANNEL_TYPES.includes(channel.type as any)) return false;
+
+      const chDate = dayjs(channel.start_date);
+      return chDate.isBetween(startOfMonth, endOfMonth, 'day', '[]');
+    });
+  }, [standaloneChannels, selectedProjects, hideSport, startOfMonth, endOfMonth]);
 
   const handleMonthChange = (date: dayjs.Dayjs | null) => {
-    if (date) {
-      setSelectedMonth(date.month() + 1); // Прибавляем 1, так как dayjs возвращает месяц от 0 до 11
-      setSelectedYear(date.year());
-    }
+    if (!date) return;
+    setSelectedMonth(date.month() + 1);
+    setSelectedYear(date.year());
   };
 
   const handleProjectsChange = (event: SelectChangeEvent<string[]>) => {
     const selectedValues = event.target.value as string[];
-    // Сортируем выбранные проекты в соответствии с порядком в оригинальном массиве
-    const sortedProjects = PROJECTS.filter(project => selectedValues.includes(project));
-    setSelectedProjects(sortedProjects);
+    const sorted = PROJECTS.filter((p) => selectedValues.includes(p)); // сохранить порядок
+    setSelectedProjects(sorted);
   };
 
   return (
@@ -125,137 +146,193 @@ const Calendar: React.FC<CalendarProps> = ({
       )}
 
       {/* Фильтры */}
-      <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <IconButton
-              onClick={() => {
-                if (selectedMonth === 1) {
-                  setSelectedMonth(12);
-                  setSelectedYear(selectedYear - 1);
-                } else {
-                  setSelectedMonth(selectedMonth - 1);
-                }
-              }}
-              size="small"
-              sx={{ mr: 1 }}
-            >
-              <ChevronLeftIcon />
-            </IconButton>
-            <FormControl sx={{ minWidth: 200 }}>
-              <DatePicker
-                views={['month', 'year']}
-                label="Месяц"
-                value={dayjs().year(selectedYear).month(selectedMonth - 1)}
-                onChange={handleMonthChange}
-              />
-            </FormControl>
-            <IconButton
-              onClick={() => {
-                if (selectedMonth === 12) {
-                  setSelectedMonth(1);
-                  setSelectedYear(selectedYear + 1);
-                } else {
-                  setSelectedMonth(selectedMonth + 1);
-                }
-              }}
-              size="small"
-              sx={{ ml: 1 }}
-            >
-              <ChevronRightIcon />
-            </IconButton>
-          </Box>
+      <Paper
+        variant="outlined"
+        sx={{
+          mb: 3,
+          p: 2.5,
+          borderRadius: 3,
+          borderColor: 'divider',
+          bgcolor: 'background.default',
+        }}
+      >
+       
 
-          <FormControl sx={{ minWidth: 200 }}>
-            <InputLabel
-              sx={{
-                textDecoration: 'none',
-                color: 'secondary',
-              }}
-            >
-              Проекты
-            </InputLabel>
-            <Select
-              multiple
-              value={selectedProjects}
-              onChange={handleProjectsChange}
-              renderValue={(selected) => (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {(selected as string[]).map((value) => (
-                    <Chip
-                      key={value}
-                      label={value}
-                      size="small"
-                      sx={{
-                        backgroundColor: 'secondary.main',
-                        color: 'secondary.contrastText',
-                      }}
-                    />
-                  ))}
-                </Box>
-              )}
-              label="Проекты"
-            >
-              <ListSubheader>
-                <Box sx={{ display: 'flex', gap: 1, p: 1 }}>
-                  <Button
-                    size="small"
-                    color="secondary"
-                    onClick={(e) => { e.stopPropagation(); setSelectedProjects([]); }}
-                  >
-                    Снять все
-                  </Button>
-                  <Button size="small" color="secondary" onClick={(e) => { e.stopPropagation(); setSelectedProjects(PROJECTS); }}>
-                    Выделить все
-                  </Button>
-                </Box>
-              </ListSubheader>
-              <Divider />
-              {PROJECTS.map((project) => (
-                <MenuItem 
-                  key={project} 
-                  value={project}
-                  sx={{
-                    '&.Mui-selected': {
-                      backgroundColor: 'primary.light',
-                      '&:hover': {
-                        backgroundColor: 'primary.main',
-                      }
+        <Grid container spacing={2} alignItems="center" wrap="wrap" sx={{ rowGap: 2 }}>
+          {/* Месяц */}
+          <Grid item xs={12} md="auto">
+            <Stack direction="column" spacing={0.5} sx={{ minWidth: 220 }}>
+              <FormLabel sx={{ fontSize: 12, color: 'text.secondary' }}>Месяц</FormLabel>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <IconButton
+                  onClick={() => {
+                    if (selectedMonth === 1) {
+                      setSelectedMonth(12);
+                      setSelectedYear(selectedYear - 1);
+                    } else {
+                      setSelectedMonth(selectedMonth - 1);
                     }
                   }}
+                  size="small"
+                  sx={{ border: 1, borderColor: 'divider', borderRadius: 2 }}
                 >
-                  {project}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+                  <ChevronLeftIcon fontSize="small" />
+                </IconButton>
 
-          <Button
-            variant="contained"
-            onClick={() => loadEvents()}
-            disabled={loading}
-            startIcon={loading ? <CircularProgress size={20} /> : null}
-          >
-            Обновить
-          </Button>
-        </Box>
+                <DatePicker
+                  views={['month', 'year']}
+                  value={dayjs().year(selectedYear).month(selectedMonth - 1)}
+                  onChange={handleMonthChange}
+                  slotProps={{
+                    textField: {
+                      size: 'small',
+                      fullWidth: true,
+                      placeholder: 'Выберите месяц',
+                    },
+                    field: { clearable: false },
+                  }}
+                />
 
-        {/* Легенда цветов */}
-        <Box sx={{ position: 'relative' }}>
-          <ColorLegend />
-        </Box>
-      </Box>
+                <IconButton
+                  onClick={() => {
+                    if (selectedMonth === 12) {
+                      setSelectedMonth(1);
+                      setSelectedYear(selectedYear + 1);
+                    } else {
+                      setSelectedMonth(selectedMonth + 1);
+                    }
+                  }}
+                  size="small"
+                  sx={{ border: 1, borderColor: 'divider', borderRadius: 2 }}
+                >
+                  <ChevronRightIcon fontSize="small" />
+                </IconButton>
+              </Stack>
+            </Stack>
+          </Grid>
 
-      {/* Отображение количества событий */}
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="subtitle1" color="text.secondary">
-          Найдено событий: {filteredEvents.length}
-        </Typography>
-      </Box>
+          {/* Проекты */}
+          <Grid item xs={12} md>
+            <Stack direction="column" spacing={0.5}>
+              <FormLabel sx={{ fontSize: 12, color: 'text.secondary' }}>Проекты</FormLabel>
+              <FormControl fullWidth>
+                <Select
+                  multiple
+                  size="small"
+                  fullWidth
+                  value={selectedProjects}
+                  onChange={handleProjectsChange}
+                  displayEmpty
+                  renderValue={(selected) => {
+                    const sel = selected as string[];
+                    if (!sel.length) return <Box sx={{ opacity: 0.6 }}>Не выбрано</Box>;
+                    const max = 8;
+                    const visible = sel.slice(0, max);
+                    const rest = sel.length - visible.length;
+                    return (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, overflow: 'hidden' }}>
+                        <Box sx={{ display: 'flex', gap: 0.5, overflowX: 'auto', pr: 0.5 }}>
+                          {visible.map((v) => (
+                            <Chip
+                              key={v}
+                              label={v}
+                              size="small"
+                              sx={{
+                                height: 24,
+                                '& .MuiChip-label': { px: 1 },
+                                bgcolor: 'secondary.main',
+                                color: 'secondary.contrastText',
+                              }}
+                            />
+                          ))}
+                        </Box>
+                        {rest > 0 && (
+                          <Chip size="small" label={`+${rest}`} sx={{ height: 24, '& .MuiChip-label': { px: 1 } }} />
+                        )}
+                      </Box>
+                    );
+                  }}
+                  MenuProps={{ PaperProps: { sx: { maxHeight: 360 } } }}
+                >
+                  <ListSubheader disableSticky>
+                    <Box sx={{ display: 'flex', gap: 1, p: 1 }}>
+                      <Button
+                        size="small"
+                        color="secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedProjects([]);
+                        }}
+                      >
+                        Снять все
+                      </Button>
+                      <Button
+                        size="small"
+                        color="secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedProjects(PROJECTS);
+                        }}
+                      >
+                        Выделить все
+                      </Button>
+                    </Box>
+                  </ListSubheader>
+                  <Divider />
+                  {PROJECTS.map((project) => (
+                    <MenuItem
+                      key={project}
+                      value={project}
+                      sx={{
+                        '&.Mui-selected': {
+                          bgcolor: 'primary.light',
+                          '&:hover': { bgcolor: 'primary.main' },
+                        },
+                      }}
+                    >
+                      {project}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Stack>
+          </Grid>
+
+          {/* Действия */}
+          <Grid item xs={12} md="auto">
+            <Stack
+              direction="row"
+              spacing={2}
+              alignItems="center"
+              justifyContent={{ xs: 'flex-start', md: 'flex-end' }}
+              sx={{ minWidth: { md: 360 } }}
+            >
+              <Button
+                variant="contained"
+                onClick={() => loadEvents()}
+                disabled={loading}
+                startIcon={loading ? <CircularProgress size={18} /> : null}
+                sx={{ minWidth: 120, height: 40, borderRadius: 2 }}
+              >
+                Обновить
+              </Button>
+
+              <FormControlLabel
+                control={<Checkbox checked={hideSport} onChange={(e) => setHideSport(e.target.checked)} />}
+                label="Скрыть спорт"
+                sx={{ m: 0, '.MuiFormControlLabel-label': { fontSize: 14 } }}
+              />
+
+              <ColorLegend />
+            </Stack>
+          </Grid>
+        </Grid>
+      </Paper>
 
       {/* Календарь */}
       <CalendarGrid
         events={filteredEvents}
+        standaloneChannels={filteredStandaloneChannels}
         selectedMonth={selectedMonth}
         selectedYear={selectedYear}
         onEventsUpdate={onEventsUpdate}
@@ -273,4 +350,4 @@ const Calendar: React.FC<CalendarProps> = ({
   );
 };
 
-export default Calendar; 
+export default Calendar;

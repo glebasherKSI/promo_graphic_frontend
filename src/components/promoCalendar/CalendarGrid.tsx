@@ -69,6 +69,7 @@ const getChannelColor = (channelType: string): string => {
 
 interface CalendarGridProps {
   events: PromoEvent[];
+  standaloneChannels: InfoChannel[];
   selectedMonth: number;
   selectedYear: number;
   onEventsUpdate: (events: PromoEvent[]) => void;
@@ -85,6 +86,7 @@ interface CalendarGridProps {
 
 const CalendarGrid: React.FC<CalendarGridProps> = ({
   events,
+  standaloneChannels,
   selectedMonth,
   selectedYear,
   onEventsUpdate,
@@ -1359,6 +1361,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                     project={project}
                     projectIndex={projectIndex}
                     events={processedEvents}
+                    standaloneChannels={standaloneChannels}
                     days={days}
                     daysInMonth={daysInMonth}
                     PROMO_TYPES={PROMO_TYPES}
@@ -1385,6 +1388,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                   <EventBarsLayer
                     project={project}
                     events={processedEvents}
+                    standaloneChannels={standaloneChannels}
                     days={days}
                     selectedMonth={selectedMonth}
                     selectedYear={selectedYear}
