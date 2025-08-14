@@ -662,7 +662,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                 <Typography variant="caption" color="text.secondary">
                   Комментарий
                 </Typography>
-                <Typography variant="body2">
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
                   {channel.comment}
                 </Typography>
               </Box>
@@ -740,7 +740,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                 <Typography variant="caption" color="text.secondary">
                   Комментарий
                 </Typography>
-                <Typography variant="body2">
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
                   {promoEvent.comment}
                 </Typography>
               </Box>
@@ -900,6 +900,27 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     }
     handleCloseMenu();
   }, [selectedEvent, onChannelEdit, onEventEdit]);
+
+  // Добавляем функцию для перехода по ссылке
+  const handleGoToLink = useCallback(() => {
+    if (selectedEvent) {
+      let link = '';
+      
+      if (selectedEvent._channel) {
+        // Для канала информирования
+        link = selectedEvent._channel.link;
+      } else {
+        // Для промо-события
+        link = selectedEvent.link;
+      }
+      
+      // Проверяем что ссылка существует и не пустая
+      if (link && link.trim() !== '') {
+        window.open(link, '_blank', 'noopener,noreferrer');
+      }
+    }
+    handleCloseMenu();
+  }, [selectedEvent, handleCloseMenu]);
 
   const handleDeleteClick = useCallback(() => {
     setConfirmDeleteOpen(true);
@@ -1466,6 +1487,26 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
             >
               {selectedEvent.is_recurring ? 'Редактировать (недоступно для рекуррентных событий)' : 'Редактировать'}
             </MenuItem>
+            
+            {/* Добавляем пункт "Перейти по ссылке" */}
+            <MenuItem 
+              onClick={handleGoToLink}
+              disabled={
+                selectedEvent._channel 
+                  ? !selectedEvent._channel.link || selectedEvent._channel.link.trim() === ''
+                  : !selectedEvent.link || selectedEvent.link.trim() === ''
+              }
+              sx={{ 
+                opacity: (
+                  selectedEvent._channel 
+                    ? !selectedEvent._channel.link || selectedEvent._channel.link.trim() === ''
+                    : !selectedEvent.link || selectedEvent.link.trim() === ''
+                ) ? 0.5 : 1
+              }}
+            >
+              Перейти по ссылке
+            </MenuItem>
+            
             {auth.user?.role === 'admin' && (
               <MenuItem 
                 onClick={handleDeleteClick} 
