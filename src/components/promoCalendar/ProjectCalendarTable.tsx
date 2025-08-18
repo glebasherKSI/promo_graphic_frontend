@@ -451,12 +451,20 @@ const ProjectCalendarTable: React.FC<ProjectCalendarTableProps> = ({
                           placement="right"
                           arrow
                           PopperProps={{
+                            modifiers: [
+                              { name: 'flip', enabled: true, options: { altBoundary: true, rootBoundary: 'viewport', padding: 8 } },
+                              { name: 'preventOverflow', options: { altAxis: true, tether: true, rootBoundary: 'viewport', padding: 8 } }
+                            ],
                             sx: {
                               '& .MuiTooltip-tooltip': {
                                 bgcolor: '#333a56',
                                 color: '#eff0f1',
                                 p: 0,
-                                maxWidth: 'none'
+                                maxWidth: 'none',
+                                maxHeight: '70vh',
+                                overflowY: 'auto',
+                                wordBreak: 'break-word',
+                                overflowWrap: 'anywhere'
                               },
                               '& .MuiTooltip-arrow': {
                                 color: '#333a56'

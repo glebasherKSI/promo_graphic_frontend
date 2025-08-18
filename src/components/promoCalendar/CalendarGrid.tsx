@@ -624,7 +624,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     if (isChannel) {
       const channel = event as InfoChannel;
       return (
-        <Box sx={{ p: 1, maxWidth: 300 }}>
+        <Box sx={{ p: 1, maxWidth: 300, maxHeight: '60vh', overflowY: 'auto' }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
             {channel.type}
           </Typography>
@@ -682,7 +682,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     } else {
       const promoEvent = event as PromoEvent;
       return (
-        <Box sx={{ p: 1, maxWidth: 300 }}>
+        <Box sx={{ p: 1, maxWidth: 300, maxHeight: '60vh', overflowY: 'auto' }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
             {promoEvent.name || 'Без названия'}
           </Typography>
@@ -1299,25 +1299,11 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     const monthEnd = monthStart.endOf('month');
     
     return events.map(ev => {
-      // Если у события есть каналы информирования, фильтруем только те, которые попадают в выбранный месяц
+      // Теперь выводим все каналы события, не фильтруем по месяцу
       if (ev.info_channels && ev.info_channels.length > 0) {
-        const filteredChannels = ev.info_channels.filter(channel => {
-          try {
-            const channelDate = dayjs.utc(channel.start_date);
-            if (!channelDate.isValid()) {
-              console.warn('Пропускаем канал с невалидной датой:', channel);
-              return false;
-            }
-            return channelDate.isBetween(monthStart, monthEnd, 'day', '[]');
-          } catch (error) {
-            console.warn('Ошибка при фильтрации канала:', error, channel);
-            return false;
-          }
-        });
-        
         return {
           ...ev,
-          info_channels: filteredChannels
+          info_channels: ev.info_channels
         };
       }
       

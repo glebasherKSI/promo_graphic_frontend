@@ -564,67 +564,6 @@ const PromoEventDialog: React.FC<PromoEventDialogProps> = ({
               disabled={event?.is_recurring}
             />
 
-            {/* Информирование */}
-            <Typography variant="h6" gutterBottom>
-              Информирование
-            </Typography>
-
-            {/* Мультивыбор типов каналов */}
-            <FormControl fullWidth>
-              <InputLabel>Типы информирования</InputLabel>
-              <Select
-                multiple
-                value={selectedChannelTypes}
-                onChange={handleChannelTypesChange}
-                input={<OutlinedInput label="Типы информирования" />}
-                disabled={event?.is_recurring}
-                renderValue={(selected) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selected.map((value) => (
-                      <Chip key={value} label={value} size="small" />
-                    ))}
-                  </Box>
-                )}
-              >
-                {CHANNEL_TYPES.map((type) => (
-                  <MenuItem key={type} value={type}>
-                    <Checkbox checked={selectedChannelTypes.indexOf(type) > -1} />
-                    <ListItemText primary={type} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            {/* Поля для выбранных каналов */}
-            {selectedChannelTypes.length > 0 && (
-              <Stack spacing={2}>
-                {selectedChannelTypes.map((type) => (
-                  <Box
-                    key={type}
-                    sx={{
-                      p: 2,
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      borderRadius: 1,
-                    }}
-                  >
-                    <Typography variant="subtitle2" gutterBottom>
-                      {type}
-                    </Typography>
-                    <Stack direction="row" spacing={2} alignItems="flex-start">
-                      <DateTimePicker
-                        label="Дата старта"
-                        value={channelData[type]?.start_date ? dayjs(channelData[type].start_date) : null}
-                        onChange={(date) => handleChannelDataChange(type, 'start_date', date?.format('YYYY-MM-DDTHH:mm:ss'))}
-                        disabled={event?.is_recurring}
-                        slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                      />
-                    </Stack>
-                  </Box>
-                ))}
-              </Stack>
-            )}
-
             {/* Существующие каналы информирования (только для чтения) */}
             {event && event.info_channels && event.info_channels.length > 0 && (
               <Box sx={{ mt: 2 }}>

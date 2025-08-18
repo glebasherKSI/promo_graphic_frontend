@@ -268,12 +268,18 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
         leaveDelay={0}
         enterNextDelay={100}
         PopperProps={{
+          modifiers: [
+            { name: 'flip', enabled: true, options: { altBoundary: true, rootBoundary: 'viewport', padding: 8 } },
+            { name: 'preventOverflow', options: { altAxis: true, tether: true, rootBoundary: 'viewport', padding: 8 } }
+          ],
           sx: {
             '& .MuiTooltip-tooltip': {
               bgcolor: 'rgba(51, 58, 86, 0.65)',
               color: '#eff0f1',
               p: 0,
               maxWidth: 'none',
+              maxHeight: '70vh',
+              overflowY: 'auto',
               backdropFilter: 'blur(8px)',
               border: '1px solid rgba(255, 255, 255, 0.1)',
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
@@ -412,12 +418,18 @@ const EventBarsLayer: React.FC<EventBarsLayerProps> = ({
             leaveDelay={0}
             enterNextDelay={100}
             PopperProps={{
+              modifiers: [
+                { name: 'flip', enabled: true, options: { altBoundary: true, rootBoundary: 'viewport', padding: 8 } },
+                { name: 'preventOverflow', options: { altAxis: true, tether: true, rootBoundary: 'viewport', padding: 8 } }
+              ],
               sx: {
                 '& .MuiTooltip-tooltip': {
                   bgcolor: 'rgba(51, 58, 86, 0.65)',
                   color: '#eff0f1',
                   p: 0,
                   maxWidth: 'none',
+                  maxHeight: '70vh',
+                  overflowY: 'auto',
                   backdropFilter: 'blur(8px)',
                   border: '1px solid rgba(255, 255, 255, 0.1)',
                   boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',

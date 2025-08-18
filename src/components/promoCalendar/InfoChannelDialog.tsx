@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -13,6 +13,7 @@ import {
   Box,
   Typography
 } from '@mui/material';
+import Autocomplete from '@mui/material/Autocomplete';
 import { DateTimePicker } from '@mui/x-date-pickers';
 import { InfoChannel, InfoChannelFormData, PromoEvent } from '../../types';
 import dayjs from '../../utils/dayjs';
@@ -109,6 +110,19 @@ const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
     formData.project ? event.project === formData.project : false
   );
 
+  type PromoOption = { id: number | string; label: string };
+  const promoOptions = useMemo<PromoOption[]>(() => (
+    filteredPromoEvents.map(ev => ({
+      id: ev.id,
+      label: `${ev.name} (${ev.promo_type} - ${dayjs.utc(ev.start_date).format('DD.MM.YYYY')})`
+    }))
+  ), [filteredPromoEvents]);
+
+  const selectedPromoOption = useMemo<PromoOption | null>(() => {
+    if (!formData.promo_id) return null;
+    return promoOptions.find(opt => String(opt.id) === String(formData.promo_id)) || null;
+  }, [promoOptions, formData.promo_id]);
+
   const handleSubmit = async () => {
     try {
       setLoading(true);
@@ -185,25 +199,20 @@ const InfoChannelDialog: React.FC<InfoChannelDialogProps> = ({
             </Select>
           </FormControl>
 
-          {/* Идентификатор промо */}
-          <FormControl fullWidth>
-            <InputLabel>Идентификатор промо</InputLabel>
-            <Select
-              value={formData.promo_id || ''}
-              onChange={(e) => handleChange('promo_id', e.target.value)}
-              label="Идентификатор промо"
-              disabled={!formData.project}
-            >
-              <MenuItem value="">
-                <em>Не выбрано</em>
-              </MenuItem>
-              {filteredPromoEvents.map(event => (
-                <MenuItem key={event.id} value={event.id}>
-                  {event.name} ({event.promo_type} - {dayjs.utc(event.start_date).format('DD.MM.YYYY')})
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          {/* Идентификатор промо (с поиском) */}
+          <Autocomplete
+            fullWidth
+            options={promoOptions}
+            value={selectedPromoOption}
+            onChange={(_, option) => handleChange('promo_id', option ? option.id : '')}
+            getOptionLabel={(option) => option.label}
+            isOptionEqualToValue={(option, value) => String(option.id) === String(value.id)}
+            disabled={!formData.project}
+            noOptionsText="Ничего не найдено"
+            renderInput={(params) => (
+              <TextField {...params} label="Идентификатор промо" placeholder="Начните вводить название..." />
+            )}
+          />
 
           {/* Дата */}
           <DateTimePicker
