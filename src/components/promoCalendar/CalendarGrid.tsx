@@ -1835,12 +1835,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                 <MenuItem onClick={() => handleCopyEventFromContext(false)}>Копировать событие</MenuItem>
               </>
             )}
-            {selectedEvent._channel && (
-              <>
-                <MenuItem onClick={() => handleCopyChannelFromContext(false)}>Копировать канал</MenuItem>
-                <MenuItem onClick={() => handleCopyChannelFromContext(true)}>Копировать все каналы этого события</MenuItem>
-              </>
-            )}
+            
 
             {/* Добавляем пункт "Перейти по ссылке" */}
             <MenuItem 
