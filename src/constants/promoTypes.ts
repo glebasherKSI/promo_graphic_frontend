@@ -130,7 +130,8 @@ export const TASK_PROJECTS = [
   'Gizbo',
   'Irwin',
   'FLAGMAN',
-  'MARTIN'
+  'MARTIN',
+  'Beef Casino'
 ] as const;
 
 // Маппинг русских названий задач на английские

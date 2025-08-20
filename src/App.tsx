@@ -271,7 +271,7 @@ axios.interceptors.response.use(
 );
 
 // Константы
-export const PROJECTS = ['ROX', 'FRESH', 'SOL', 'JET', 'IZZI', 'VOLNA', 'Legzo', 'STARDA', 'DRIP', 'Monro', '1GO', 'LEX', 'Gizbo', 'Irwin', 'FLAGMAN', 'MARTIN'];
+export const PROJECTS = ['ROX', 'FRESH', 'SOL', 'JET', 'IZZI', 'VOLNA', 'Legzo', 'STARDA', 'DRIP', 'Monro', '1GO', 'LEX', 'Gizbo', 'Irwin', 'FLAGMAN', 'MARTIN', 'Beef Casino'];
 
 function App() {
   const [events, setEvents] = useState<PromoEvent[]>([]);

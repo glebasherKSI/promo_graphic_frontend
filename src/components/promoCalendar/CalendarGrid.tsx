@@ -27,6 +27,7 @@ import {
   Snackbar,
   Alert
 } from '@mui/material';
+import { FormControl, FormControlLabel, RadioGroup, Radio, Checkbox, Select, InputLabel } from '@mui/material';
 import dayjs from '../../utils/dayjs';
 import { PromoEvent, InfoChannel, AuthState, DisplayPromoEvent } from '../../types';
 import axios from 'axios';
@@ -511,6 +512,21 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
+  // Уведомление
+  const [copyStatus, setCopyStatus] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({ open: false, message: '', severity: 'success' });
+
+  // Буфер для вставки (локальный клипборд данных)
+  const [clipboardData, setClipboardData] = useState<{
+    project: string;
+    startDate: string; // ISO
+    endDate: string;   // ISO
+    includeChannels: boolean;
+    items: Array<Record<string, any>>; // события и каналы с исходными ISO-датами
+  } | null>(null);
+  const [isPasting, setIsPasting] = useState(false);
+  const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
+  const [pasteTargetProject, setPasteTargetProject] = useState<string | null>(null);
+
   // CSS стили для выделенных ячеек (добавляем в head)
   React.useEffect(() => {
     const style = document.createElement('style');
@@ -970,6 +986,121 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     setConfirmDeleteOpen(false);
   }, []);
 
+  // Вспомогательный парсер сегментов в массив
+  const splitSegmentsToArray = useCallback((seg: any) => {
+    if (Array.isArray(seg)) return seg;
+    if (!seg) return [];
+    return String(seg)
+      .split(',')
+      .map((s: string) => s.trim())
+      .filter(Boolean);
+  }, []);
+
+  // Копирование из контекстного меню события
+  const handleCopyEventFromContext = useCallback((includeChannels: boolean) => {
+    if (!selectedEvent || selectedEvent._channel) return;
+    const sourceEvent = events.find(ev => ev.id === selectedEvent.id);
+    if (!sourceEvent) return;
+
+    const items: Array<Record<string, any>> = [];
+    items.push({
+      kind: 'event',
+      id: sourceEvent.id,
+      project: sourceEvent.project,
+      name: sourceEvent.name || '',
+      promo_type: sourceEvent.promo_type || '',
+      promo_kind: sourceEvent.promo_kind || '',
+      comment: sourceEvent.comment || '',
+      segments: splitSegmentsToArray(sourceEvent.segments),
+      responsible_name: sourceEvent.responsible_name || '',
+      link: sourceEvent.link || '',
+      start_date: sourceEvent.start_date,
+      end_date: sourceEvent.end_date
+    });
+
+    if (includeChannels) {
+      (sourceEvent.info_channels || []).forEach(ch => {
+        items.push({
+          kind: 'channel',
+          id: ch.id,
+          parent_event_id: sourceEvent.id,
+          project: sourceEvent.project,
+          name: ch.name || '',
+          type: ch.type || '',
+          comment: ch.comment || '',
+          segments: splitSegmentsToArray(ch.segments),
+          link: ch.link || '',
+          start_date: ch.start_date
+        });
+      });
+    }
+
+    setClipboardData({
+      project: sourceEvent.project,
+      startDate: sourceEvent.start_date,
+      endDate: sourceEvent.end_date,
+      includeChannels,
+      items
+    });
+    setCopyStatus({ open: true, message: includeChannels ? 'Событие (с каналами) скопировано' : 'Событие скопировано', severity: 'success' });
+    handleCloseMenu();
+  }, [selectedEvent, events, splitSegmentsToArray, handleCloseMenu]);
+
+  // Копирование из контекстного меню канала
+  const handleCopyChannelFromContext = useCallback((copyAllForEvent: boolean) => {
+    if (!selectedEvent || !selectedEvent._channel) return;
+    const ch = selectedEvent._channel;
+    const items: Array<Record<string, any>> = [];
+
+    if (copyAllForEvent && ch.promo_id) {
+      const parent = events.find(ev => ev.id === ch.promo_id);
+      const channels = parent?.info_channels || [];
+      channels.forEach(c => {
+        items.push({
+          kind: 'channel',
+          id: c.id,
+          parent_event_id: c.promo_id || parent?.id || '',
+          project: parent?.project || c.project,
+          name: c.name || '',
+          type: c.type || '',
+          comment: c.comment || '',
+          segments: splitSegmentsToArray(c.segments),
+          link: c.link || '',
+          start_date: c.start_date
+        });
+      });
+    } else {
+      items.push({
+        kind: 'channel',
+        id: ch.id,
+        parent_event_id: ch.promo_id || '',
+        project: ch.project,
+        name: ch.name || '',
+        type: ch.type || '',
+        comment: ch.comment || '',
+        segments: splitSegmentsToArray(ch.segments),
+        link: ch.link || '',
+        start_date: ch.start_date
+      });
+    }
+
+    // базовая дата — минимальная дата каналов
+    const minStart = items.reduce((min, it) => {
+      const d = dayjs.utc(it.start_date);
+      return !min || d.isBefore(min) ? d : min;
+    }, null as any);
+
+    setClipboardData({
+      project: (selectedEvent._channel.project),
+      startDate: (minStart ? minStart.startOf('day').format('YYYY-MM-DDTHH:mm:ss') : dayjs.utc().format('YYYY-MM-DDTHH:mm:ss')),
+      endDate: (minStart ? minStart.endOf('day').format('YYYY-MM-DDTHH:mm:ss') : dayjs.utc().format('YYYY-MM-DDTHH:mm:ss')),
+      includeChannels: true,
+      items
+    });
+    setCopyStatus({ open: true, message: copyAllForEvent ? 'Каналы события скопированы' : 'Канал скопирован', severity: 'success' });
+    handleCloseMenu();
+  }, [selectedEvent, events, splitSegmentsToArray, handleCloseMenu]);
+
   // days уже определен выше как useMemo
 
   // Оптимизированная функция для обновления выделения в DOM без ререндера
@@ -1014,7 +1145,6 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && selectedCellsRef.current.size > 0) {
-        // Убираем классы выделения с DOM элементов
         selectedCellsRef.current.forEach(cellKey => {
           const cell = document.querySelector(`[data-cell-key="${cellKey}"]`);
           if (cell) {
@@ -1293,6 +1423,230 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     handleCloseCellMenu();
   }, [selectedCellsData, onChannelCreate, handleCloseCellMenu]);
 
+  // Построение исходных элементов (сырых) для копирования и последующей вставки
+  const buildIntervalCopyItems = useCallback((
+    project: string,
+    rowType: string,
+    startDate: string,
+    endDate: string,
+    includeChannels: boolean,
+    isChannelRow: boolean
+  ) => {
+    const start = dayjs.utc(startDate);
+    const end = dayjs.utc(endDate);
+
+    const inInterval = (s: string, e?: string) => {
+      const startDt = dayjs.utc(s);
+      const endDt = e ? dayjs.utc(e) : startDt;
+      return !(endDt.isBefore(start) || startDt.isAfter(end));
+    };
+
+    const normalizeSegments = (seg: any) => Array.isArray(seg) ? seg : (seg ? [seg] : []);
+
+    const eventItems = events
+      .filter(ev => !isChannelRow && ev.project === project && ev.promo_type === rowType && inInterval(ev.start_date, ev.end_date))
+      .map(ev => ({
+        kind: 'event',
+        id: ev.id,
+        project: ev.project,
+        name: ev.name || '',
+        promo_type: ev.promo_type || '',
+        promo_kind: ev.promo_kind || '',
+        comment: ev.comment || '',
+        segments: normalizeSegments(ev.segments),
+        responsible_name: ev.responsible_name || '',
+        link: ev.link || '',
+        start_date: ev.start_date, // ISO
+        end_date: ev.end_date     // ISO
+      }));
+
+    const items: Array<Record<string, any>> = [...eventItems];
+
+    if (!isChannelRow && includeChannels) {
+      // Только каналы, связанные с выбранными событиями
+      events
+        .filter(ev => ev.project === project && ev.promo_type === rowType && inInterval(ev.start_date, ev.end_date))
+        .forEach(ev => {
+          (ev.info_channels || []).forEach(ch => {
+            if (inInterval(ch.start_date)) {
+              items.push({
+                kind: 'channel',
+                id: ch.id,
+                parent_event_id: ev.id,
+                project: ev.project,
+                name: ch.name || '',
+                type: ch.type || '',
+                comment: ch.comment || '',
+                segments: normalizeSegments(ch.segments),
+                link: ch.link || '',
+                start_date: ch.start_date // ISO
+              });
+            }
+          });
+        });
+    }
+
+    // Копирование из строки каналов: берём только каналы выбранного типа в интервале
+    if (isChannelRow) {
+      // Каналы у событий соответствующего типа
+      events
+        .filter(ev => ev.project === project)
+        .forEach(ev => {
+          (ev.info_channels || [])
+            .filter(ch => ch.type === rowType && inInterval(ch.start_date))
+            .forEach(ch => {
+              items.push({
+                kind: 'channel',
+                id: ch.id,
+                parent_event_id: ev.id,
+                project: ev.project,
+                name: ch.name || '',
+                type: ch.type || '',
+                comment: ch.comment || '',
+                segments: normalizeSegments(ch.segments),
+                link: ch.link || '',
+                start_date: ch.start_date
+              });
+            });
+        });
+      // Плюс standalone-каналы соответствующего типа
+      standaloneChannels
+        .filter(ch => ch.project === project && ch.type === rowType && inInterval(ch.start_date))
+        .forEach(ch => {
+          items.push({
+            kind: 'channel',
+            id: ch.id,
+            parent_event_id: '',
+            project: ch.project,
+            name: ch.name || '',
+            type: ch.type || '',
+            comment: ch.comment || '',
+            segments: normalizeSegments(ch.segments),
+            link: ch.link || '',
+            start_date: ch.start_date
+          });
+        });
+    }
+
+    return items;
+  }, [events, standaloneChannels]);
+
+  // Копирование элементов в локальный буфер для последующей вставки
+  const deriveSelectionDataFromRef = useCallback(() => {
+    if (selectedCellsRef.current.size === 0) return null;
+    const cellKeys = Array.from(selectedCellsRef.current);
+    const firstCellKey = cellKeys[0];
+    const parts = firstCellKey.split('-');
+    const project = parts[0];
+    const rowType = parts.slice(1, -1).join('-');
+    const { startDate, endDate } = getSelectedCellsDates(cellKeys);
+    const isChannelRow = CHANNEL_TYPES.some(type => type === rowType);
+    return { project, rowType, startDate, endDate, isChannelRow };
+  }, [getSelectedCellsDates]);
+
+  const handleCopyForPaste = useCallback((withChannels: boolean) => {
+    const base = selectedCellsData || deriveSelectionDataFromRef();
+    if (!base) return;
+    const items = buildIntervalCopyItems(
+      base.project,
+      base.rowType,
+      base.startDate,
+      base.endDate,
+      withChannels,
+      base.isChannelRow
+    );
+    setClipboardData({
+      project: base.project,
+      startDate: base.startDate,
+      endDate: base.endDate,
+      includeChannels: withChannels,
+      items
+    });
+    setCopyStatus({ open: true, message: withChannels ? 'Диапазон (с каналами) скопирован' : 'Диапазон (без каналов) скопирован', severity: 'success' });
+    handleCloseCellMenu();
+  }, [selectedCellsData, deriveSelectionDataFromRef, buildIntervalCopyItems, handleCloseCellMenu]);
+
+  // Вставка (создание новых сущностей) со сдвигом дат
+  const handlePasteInterval = useCallback(async (overrideProject?: string) => {
+    const base = selectedCellsData || deriveSelectionDataFromRef();
+    if (!base || !clipboardData) return;
+    try {
+      setIsPasting(true);
+      const sourceStart = dayjs.utc(clipboardData.startDate).startOf('day');
+      const targetStart = dayjs.utc(base.startDate).startOf('day');
+      const deltaDays = targetStart.diff(sourceStart, 'day');
+
+      // 1) Создаем события и собираем маппинг старыйId->новыйId
+      const idMap = new Map<string, string>();
+
+      for (const item of clipboardData.items) {
+        if (item.kind !== 'event') continue;
+        const newStart = dayjs.utc(item.start_date).add(deltaDays, 'day').format('YYYY-MM-DDTHH:mm:ss');
+        const newEnd = dayjs.utc(item.end_date).add(deltaDays, 'day').format('YYYY-MM-DDTHH:mm:ss');
+        
+        // Собираем каналы для этого события
+        const eventChannels = clipboardData.items
+          .filter(ch => ch.kind === 'channel' && ch.parent_event_id === item.id)
+          .map(ch => ({
+            type: ch.type,
+            name: ch.name,
+            comment: ch.comment || '',
+            segments: Array.isArray(ch.segments) && ch.segments.length
+              ? ch.segments.join(', ')
+              : (ch.segments || 'СНГ'),
+            link: ch.link || '',
+            start_date: dayjs.utc(ch.start_date).add(deltaDays, 'day').format('YYYY-MM-DDTHH:mm:ss')
+          }));
+
+        const payload: any = {
+          project: [overrideProject || base.project],
+          name: item.name,
+          promo_type: item.promo_type,
+          promo_kind: item.promo_kind || '',
+          comment: item.comment || '',
+          segments: Array.isArray(item.segments) && item.segments.length
+            ? item.segments.join(', ')
+            : (item.segments || 'СНГ'),
+          start_date: newStart,
+          end_date: newEnd,
+          link: item.link || '',
+          info_channels: eventChannels
+        };
+
+        try {
+          const res = await axios.post('/api/events', payload);
+          const newId = res?.data?.id || res?.data?.event?.id || '';
+          if (newId) {
+            idMap.set(item.id, newId);
+          }
+        } catch (e) {
+          console.error('Ошибка создания события при вставке', e, payload);
+        }
+      }
+
+      // 2) Каналы уже созданы вместе с событиями через info_channels
+
+      await new Promise(r => setTimeout(r, 100));
+      await loadEvents();
+      setCopyStatus({ open: true, message: 'Вставка завершена', severity: 'success' });
+    } catch (err) {
+      console.error(err);
+      setCopyStatus({ open: true, message: 'Ошибка при вставке', severity: 'error' });
+    } finally {
+      setIsPasting(false);
+      handleCloseCellMenu();
+    }
+  }, [selectedCellsData, deriveSelectionDataFromRef, clipboardData, loadEvents, handleCloseCellMenu]);
+
+  // Диалог выбора проекта для вставки
+  const handleOpenPasteDialog = useCallback(() => {
+    const base = selectedCellsData || deriveSelectionDataFromRef();
+    if (!base || !clipboardData) return;
+    setPasteTargetProject(base.project);
+    setPasteDialogOpen(true);
+    handleCloseCellMenu();
+  }, [selectedCellsData, deriveSelectionDataFromRef, clipboardData, handleCloseCellMenu]);
+
   const processedEvents = useMemo(() => {
     // Просто возвращаем события как есть, без генерации рекуррентных событий
     const monthStart = dayjs.utc().year(selectedYear).month(selectedMonth - 1).startOf('month');
@@ -1474,6 +1828,20 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
               {selectedEvent.is_recurring ? 'Редактировать (недоступно для рекуррентных событий)' : 'Редактировать'}
             </MenuItem>
             
+            {/* Копирование из контекстного меню */}
+            {!selectedEvent._channel && (
+              <>
+                <MenuItem onClick={() => handleCopyEventFromContext(true)}>Копировать событие (с каналами)</MenuItem>
+                <MenuItem onClick={() => handleCopyEventFromContext(false)}>Копировать событие</MenuItem>
+              </>
+            )}
+            {selectedEvent._channel && (
+              <>
+                <MenuItem onClick={() => handleCopyChannelFromContext(false)}>Копировать канал</MenuItem>
+                <MenuItem onClick={() => handleCopyChannelFromContext(true)}>Копировать все каналы этого события</MenuItem>
+              </>
+            )}
+
             {/* Добавляем пункт "Перейти по ссылке" */}
             <MenuItem 
               onClick={handleGoToLink}
@@ -1543,6 +1911,12 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                 Создать информирование
               </MenuItem>
             )}
+            <Divider sx={{ my: 0.5 }} />
+            
+            <MenuItem onClick={() => handlePasteInterval()} disabled={!clipboardData || isPasting}>
+              {isPasting ? 'Вставка...' : 'Вставить сюда'}
+            </MenuItem>
+            
           </>
         )}
       </Menu>
@@ -1562,6 +1936,56 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Диалог вставки в другой проект */}
+      <Dialog open={pasteDialogOpen} onClose={() => setPasteDialogOpen(false)}>
+        <DialogTitle>Вставить в проект</DialogTitle>
+        <DialogContent sx={{ minWidth: 360 }}>
+          <FormControl fullWidth sx={{ mt: 1 }}>
+            <InputLabel id="paste-project-label">Проект</InputLabel>
+            <Select
+              labelId="paste-project-label"
+              label="Проект"
+              native
+              value={pasteTargetProject || ''}
+              onChange={(e) => setPasteTargetProject((e.target as HTMLSelectElement).value)}
+            >
+              {/* @ts-ignore native select */}
+              <option value="" disabled>Выберите проект</option>
+              {selectedProjects.map((p) => (
+                // @ts-ignore native option
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPasteDialogOpen(false)}>Отмена</Button>
+          <Button
+            variant="contained"
+            disabled={!pasteTargetProject || isPasting}
+            onClick={async () => {
+              if (!pasteTargetProject) return;
+              await handlePasteInterval(pasteTargetProject);
+              setPasteDialogOpen(false);
+            }}
+          >
+            {isPasting ? 'Вставка...' : 'Вставить'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Уведомление о результате копирования */}
+      <Snackbar
+        open={copyStatus.open}
+        autoHideDuration={3000}
+        onClose={() => setCopyStatus({ ...copyStatus, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setCopyStatus({ ...copyStatus, open: false })} severity={copyStatus.severity} sx={{ width: '100%' }}>
+          {copyStatus.message}
+        </Alert>
+      </Snackbar>
     </>
   );
 };
